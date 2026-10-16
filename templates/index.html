@@ -25,6 +25,230 @@
         rel="stylesheet"
         href="{{ url_for('static', filename='style.css') }}"
     >
+
+    <style>
+        /* RELATÓRIOS COMPARTILHADOS */
+
+        #shared-reports {
+            margin-bottom: 24px;
+            scroll-margin-top: 20px;
+            border-color: #57734d;
+        }
+
+        #shared-reports [hidden] {
+            display: none !important;
+        }
+
+        .share-intro {
+            max-width: 780px;
+            margin: 0 0 22px;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.8;
+        }
+
+        .share-options {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .share-option {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            margin: 0;
+            padding: 21px;
+            border: 1px solid #3b5546;
+            border-radius: 12px;
+            background:
+                linear-gradient(
+                    140deg,
+                    #213b2d66,
+                    #101b17
+                );
+        }
+
+        .share-option h4 {
+            margin: 12px 0 9px;
+            font-size: 17px;
+            font-weight: 600;
+        }
+
+        .share-option > p {
+            margin: 0 0 13px;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .share-option label {
+            margin: 9px 0 18px;
+        }
+
+        .share-option input {
+            width: 100%;
+        }
+
+        .share-option > button {
+            width: 100%;
+            margin-top: auto;
+        }
+
+        .share-number {
+            display: grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border: 1px solid #6e744b;
+            border-radius: 9px;
+            background: #65552d33;
+            color: var(--gold);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        #share-status {
+            margin: 17px 0;
+            color: var(--green);
+            font-size: 13px;
+            line-height: 1.8;
+        }
+
+        #share-status:empty {
+            display: none;
+        }
+
+        #share-status.share-error {
+            color: var(--coral);
+        }
+
+        .share-result {
+            margin: 20px 0;
+            padding: 19px;
+            border: 1px solid #4e9d73;
+            border-radius: 11px;
+            background: #23543833;
+        }
+
+        .share-result label {
+            display: block;
+            margin-bottom: 11px;
+            color: var(--green);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .share-link-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .share-link-row input {
+            flex: 1 1 240px;
+            width: 100%;
+            font-size: 12px;
+        }
+
+        .share-link-row .button,
+        .share-link-row button {
+            flex-shrink: 0;
+        }
+
+        .share-history-heading {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            margin: 28px 0 15px;
+            padding-top: 23px;
+            border-top: 1px solid var(--line);
+        }
+
+        .share-history-heading h4 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .saved-report {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin-top: 12px;
+            padding: 17px;
+            border: 1px solid #354d40;
+            border-radius: 10px;
+            background: #0c171466;
+        }
+
+        .saved-report-info {
+            min-width: 0;
+        }
+
+        .saved-report-info strong {
+            display: block;
+            font-size: 13px;
+            overflow-wrap: anywhere;
+        }
+
+        .saved-report-info p {
+            margin: 7px 0;
+            font-size: 12px;
+        }
+
+        .saved-report-info small {
+            color: var(--muted);
+            font-size: 10px;
+        }
+
+        .share-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .share-actions button,
+        .share-actions .button {
+            font-size: 11px;
+        }
+
+        .share-danger {
+            border-color: #795247;
+            color: var(--coral);
+        }
+
+        @media (max-width: 1100px) {
+            .share-options {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 600px) {
+            .share-option {
+                padding: 17px;
+            }
+
+            .share-link-row button,
+            .share-link-row .button {
+                flex: 1;
+            }
+
+            .share-actions {
+                width: 100%;
+            }
+
+            .share-actions button,
+            .share-actions .button {
+                flex: 1;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -44,9 +268,7 @@
             </div>
         </div>
 
-        <p class="eyebrow">
-            WORKSPACE / 01
-        </p>
+        <p class="eyebrow">WORKSPACE / 01</p>
 
         <nav aria-label="Menu principal">
 
@@ -54,12 +276,13 @@
                 ◈ Visão geral
             </a>
 
-            <button
-                type="button"
-                onclick="openMovement()"
-            >
+            <button type="button" onclick="openMovement()">
                 ＋ Lançar movimentação
             </button>
+
+            <a href="#shared-reports">
+                ↗ Gerar link de relatório
+            </a>
 
             <a href="#history">
                 ≡ Movimentações
@@ -81,10 +304,8 @@
                 <b>KBSistemas</b>
             </p>
 
-            <form
-                action="{{ url_for('logout') }}"
-                method="POST"
-            >
+            <form action="{{ url_for('logout') }}" method="POST">
+
                 <input
                     type="hidden"
                     name="csrf"
@@ -94,6 +315,7 @@
                 <button type="submit">
                     Sair da conta ↗
                 </button>
+
             </form>
 
         </div>
@@ -129,7 +351,7 @@
 
         </header>
 
-        <!-- FILTROS -->
+        <!-- FILTROS DA DASHBOARD -->
 
         <section
             class="toolbar panel"
@@ -138,10 +360,7 @@
 
             <div class="period-tabs">
 
-                <button
-                    type="button"
-                    data-period="week"
-                >
+                <button type="button" data-period="week">
                     Esta semana
                 </button>
 
@@ -159,28 +378,15 @@
 
                 <label for="start">
                     De
-
-                    <input
-                        id="start"
-                        type="date"
-                        required
-                    >
+                    <input id="start" type="date" required>
                 </label>
 
                 <label for="end">
                     Até
-
-                    <input
-                        id="end"
-                        type="date"
-                        required
-                    >
+                    <input id="end" type="date" required>
                 </label>
 
-                <button
-                    type="button"
-                    id="apply"
-                >
+                <button type="button" id="apply">
                     Aplicar
                 </button>
 
@@ -204,10 +410,7 @@
 
         <!-- INDICADORES -->
 
-        <section
-            class="kpis"
-            aria-label="Indicadores de gastos"
-        >
+        <section class="kpis" aria-label="Indicadores de gastos">
 
             <article class="kpi featured">
 
@@ -218,9 +421,7 @@
 
                 <h2 id="total">R$ 0,00</h2>
 
-                <small>
-                    Retiradas menos devoluções
-                </small>
+                <small>Retiradas menos devoluções</small>
 
             </article>
 
@@ -233,9 +434,7 @@
 
                 <h2 id="materials">R$ 0,00</h2>
 
-                <small>
-                    Cabos, conectores e insumos
-                </small>
+                <small>Cabos, conectores e insumos</small>
 
             </article>
 
@@ -248,9 +447,7 @@
 
                 <h2 id="equipment">R$ 0,00</h2>
 
-                <small>
-                    Roteadores, ONUs e dispositivos
-                </small>
+                <small>Roteadores, ONUs e dispositivos</small>
 
             </article>
 
@@ -290,16 +487,11 @@
                         <h3>Evolução dos custos</h3>
                     </div>
 
-                    <span class="chip">
-                        Líquido diário
-                    </span>
+                    <span class="chip">Líquido diário</span>
 
                 </div>
 
-                <div
-                    id="timeline"
-                    class="timeline"
-                ></div>
+                <div id="timeline" class="timeline"></div>
 
                 <div class="chart-foot">
 
@@ -308,9 +500,7 @@
                         Custos líquidos em reais
                     </span>
 
-                    <span id="count">
-                        0 movimentações
-                    </span>
+                    <span id="count">0 movimentações</span>
 
                 </div>
 
@@ -321,10 +511,7 @@
                 <div class="section-head">
 
                     <div>
-                        <p class="eyebrow">
-                            DISTRIBUIÇÃO
-                        </p>
-
+                        <p class="eyebrow">DISTRIBUIÇÃO</p>
                         <h3>Composição dos gastos</h3>
                     </div>
 
@@ -332,10 +519,7 @@
 
                 </div>
 
-                <div
-                    class="donut"
-                    id="donut"
-                >
+                <div class="donut" id="donut">
                     <div>
                         <small>VALOR LÍQUIDO</small>
 
@@ -350,7 +534,6 @@
                     <span>
                         <i class="dot" aria-hidden="true"></i>
                         Materiais
-
                         <b id="mat-share">—</b>
                     </span>
 
@@ -359,8 +542,8 @@
                             class="dot gold-bg"
                             aria-hidden="true"
                         ></i>
-                        Equipamentos
 
+                        Equipamentos
                         <b id="eq-share">—</b>
                     </span>
 
@@ -370,7 +553,7 @@
 
         </section>
 
-        <!-- CUSTOS POR TÉCNICO E POR ITEM -->
+        <!-- CUSTOS POR TÉCNICO E ITEM -->
 
         <section
             class="chart-grid equal"
@@ -389,16 +572,11 @@
                         <h3>Custo por técnico</h3>
                     </div>
 
-                    <span class="chip">
-                        Valor líquido
-                    </span>
+                    <span class="chip">Valor líquido</span>
 
                 </div>
 
-                <div
-                    id="technician-bars"
-                    class="bars"
-                ></div>
+                <div id="technician-bars" class="bars"></div>
 
             </article>
 
@@ -414,34 +592,25 @@
                         <h3>Itens de maior impacto</h3>
                     </div>
 
-                    <span class="chip">
-                        Top 8
-                    </span>
+                    <span class="chip">Top 8</span>
 
                 </div>
 
-                <div
-                    id="item-bars"
-                    class="bars"
-                ></div>
+                <div id="item-bars" class="bars"></div>
 
                 <div class="insight">
 
                     <span aria-hidden="true">↩</span>
 
                     <div>
-
                         <small>VALOR DEVOLVIDO</small>
 
-                        <strong id="returns">
-                            R$ 0,00
-                        </strong>
+                        <strong id="returns">R$ 0,00</strong>
 
                         <p>
                             Devoluções reduzem o custo líquido
                             e mantêm vínculo com a retirada original.
                         </p>
-
                     </div>
 
                 </div>
@@ -450,20 +619,244 @@
 
         </section>
 
-        <!-- HISTÓRICO E EXPORTAÇÕES -->
+        <!-- GERAR LINKS DE RELATÓRIOS -->
 
         <section
-            id="history"
+            id="shared-reports"
             class="panel"
+            aria-labelledby="shared-title"
         >
 
             <div class="section-head">
 
                 <div>
-                    <p class="eyebrow">
-                        RASTREABILIDADE
+                    <p class="eyebrow">FECHAMENTO E COMPARTILHAMENTO</p>
+
+                    <h3 id="shared-title">
+                        Gerar link de relatório
+                    </h3>
+                </div>
+
+                <span class="chip">
+                    Todos os técnicos
+                </span>
+
+            </div>
+
+            <p class="share-intro">
+                Escolha o fechamento e gere um link para enviar ao seu chefe.
+                O relatório inclui todos os técnicos, materiais,
+                equipamentos, gráficos, retiradas e devoluções.
+                Os dados ficam preservados no momento da geração.
+            </p>
+
+            <div class="share-options">
+
+                <!-- SEMANAL -->
+
+                <form
+                    class="share-option"
+                    data-report-mode="week"
+                >
+
+                    <span class="share-number" aria-hidden="true">
+                        01
+                    </span>
+
+                    <h4>Segunda a sexta</h4>
+
+                    <p>
+                        Escolha qualquer data da semana desejada.
+                        Antes de sexta, o relatório será parcial.
                     </p>
 
+                    <label for="share-week">
+                        Data da semana
+
+                        <input
+                            id="share-week"
+                            type="date"
+                            value="{{ today }}"
+                            max="{{ today }}"
+                            required
+                        >
+                    </label>
+
+                    <button
+                        class="primary"
+                        type="submit"
+                        data-generate
+                    >
+                        Gerar link semanal
+                    </button>
+
+                </form>
+
+                <!-- ÚLTIMOS 30 DIAS -->
+
+                <form
+                    class="share-option"
+                    data-report-mode="last30"
+                >
+
+                    <span class="share-number" aria-hidden="true">
+                        02
+                    </span>
+
+                    <h4>Últimos 30 dias</h4>
+
+                    <p>
+                        Inclui hoje e os 29 dias anteriores,
+                        com todos os registros desse intervalo.
+                    </p>
+
+                    <p>
+                        Ideal para acompanhar os gastos recentes
+                        sem depender do início do mês.
+                    </p>
+
+                    <button
+                        class="primary"
+                        type="submit"
+                        data-generate
+                    >
+                        Gerar link de 30 dias
+                    </button>
+
+                </form>
+
+                <!-- MÊS FECHADO -->
+
+                <form
+                    class="share-option"
+                    data-report-mode="month"
+                >
+
+                    <span class="share-number" aria-hidden="true">
+                        03
+                    </span>
+
+                    <h4>Mês fechado</h4>
+
+                    <p>
+                        Do primeiro ao último dia de um mês
+                        já encerrado.
+                    </p>
+
+                    <label for="share-month">
+                        Mês do relatório
+
+                        <input
+                            id="share-month"
+                            type="month"
+                            required
+                        >
+                    </label>
+
+                    <button
+                        class="primary"
+                        type="submit"
+                        data-generate
+                    >
+                        Gerar link mensal
+                    </button>
+
+                </form>
+
+            </div>
+
+            <p class="footnote muted">
+                Estes fechamentos usam os períodos escolhidos acima,
+                independentemente dos filtros da dashboard.
+                Quem receber o link poderá visualizar esse relatório
+                e baixar seu PDF sem entrar na sua conta.
+            </p>
+
+            <p
+                id="share-status"
+                role="status"
+                aria-live="polite"
+            ></p>
+
+            <!-- LINK GERADO -->
+
+            <div
+                id="share-result"
+                class="share-result"
+                hidden
+            >
+
+                <label for="share-link">
+                    Link do relatório
+                </label>
+
+                <div class="share-link-row">
+
+                    <input
+                        id="share-link"
+                        type="url"
+                        readonly
+                        spellcheck="false"
+                        aria-label="Link do relatório compartilhado"
+                    >
+
+                    <button
+                        id="share-copy"
+                        type="button"
+                        class="primary"
+                    >
+                        Copiar link
+                    </button>
+
+                    <a
+                        id="share-open"
+                        class="button"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Abrir relatório ↗
+                    </a>
+
+                </div>
+
+            </div>
+
+            <!-- HISTÓRICO DE LINKS -->
+
+            <div class="share-history-heading">
+
+                <h4>Relatórios gerados</h4>
+
+                <button
+                    type="button"
+                    id="share-reload"
+                >
+                    ↻ Atualizar lista
+                </button>
+
+            </div>
+
+            <div id="share-list">
+                <p class="muted">
+                    Carregando relatórios…
+                </p>
+            </div>
+
+            <p class="footnote muted">
+                Desativar um link bloqueia novas consultas à página e ao PDF.
+                Arquivos que já foram baixados continuam com quem os recebeu.
+            </p>
+
+        </section>
+
+        <!-- HISTÓRICO E EXPORTAÇÕES -->
+
+        <section id="history" class="panel">
+
+            <div class="section-head">
+
+                <div>
+                    <p class="eyebrow">RASTREABILIDADE</p>
                     <h3>Movimentações do período</h3>
                 </div>
 
@@ -520,18 +913,12 @@
 
         <!-- CATÁLOGO -->
 
-        <section
-            id="catalog"
-            class="panel"
-        >
+        <section id="catalog" class="panel">
 
             <div class="section-head">
 
                 <div>
-                    <p class="eyebrow">
-                        BASE DE CÁLCULO
-                    </p>
-
+                    <p class="eyebrow">BASE DE CÁLCULO</p>
                     <h3>Catálogo de custos</h3>
                 </div>
 
@@ -572,11 +959,11 @@
                                 <td>{{ item.unit }}</td>
 
                                 <td>
-                                   {% if item.category == 'equipamento' %}
-    {{ item.cost | money }}
-{% else %}
-    R$ {{ ('%.6f' | format(item.cost)).rstrip('0').rstrip('.').replace('.', ',') }}
-{% endif %}
+                                    {% if item.category == 'equipamento' %}
+                                        {{ item.cost | money }}
+                                    {% else %}
+                                        R$ {{ ('%.6f' | format(item.cost)).rstrip('0').rstrip('.').replace('.', ',') }}
+                                    {% endif %}
                                 </td>
 
                             </tr>
@@ -599,6 +986,7 @@
         </section>
 
         <footer>
+
             MATRIZ
             <span>/</span>
             Relatórios que transformam registros em decisões.
@@ -607,6 +995,7 @@
                 action="{{ url_for('logout') }}"
                 method="POST"
             >
+
                 <input
                     type="hidden"
                     name="csrf"
@@ -616,7 +1005,9 @@
                 <button type="submit">
                     Sair da conta ↗
                 </button>
+
             </form>
+
         </footer>
 
     </main>
@@ -633,9 +1024,7 @@
             <div class="section-head">
 
                 <div>
-                    <p class="eyebrow">
-                        NOVO REGISTRO
-                    </p>
+                    <p class="eyebrow">NOVO REGISTRO</p>
 
                     <h3 id="movement-title">
                         Movimentação
@@ -655,10 +1044,8 @@
             <label for="kind">
                 Tipo
 
-                <select
-                    id="kind"
-                    name="kind"
-                >
+                <select id="kind" name="kind">
+
                     <option value="retirada">
                         Retirada
                     </option>
@@ -666,6 +1053,7 @@
                     <option value="devolucao">
                         Devolução sem uso
                     </option>
+
                 </select>
             </label>
 
@@ -779,10 +1167,527 @@
 
     </dialog>
 
+    <!-- SCRIPT ATUAL DA DASHBOARD -->
+
     <script
         src="{{ url_for('static', filename='app.js') }}"
         defer
     ></script>
+
+    <!-- FUNCIONAMENTO DOS RELATÓRIOS COMPARTILHADOS -->
+
+    <script>
+        (() => {
+            "use strict";
+
+            const root = document.getElementById(
+                "shared-reports"
+            );
+
+            if (!root) {
+                return;
+            }
+
+            const status = document.getElementById(
+                "share-status"
+            );
+
+            const result = document.getElementById(
+                "share-result"
+            );
+
+            const link = document.getElementById(
+                "share-link"
+            );
+
+            const open = document.getElementById(
+                "share-open"
+            );
+
+            const list = document.getElementById(
+                "share-list"
+            );
+
+            const csrf = document.querySelector(
+                'meta[name="csrf-token"]'
+            ).content;
+
+            const currency = new Intl.NumberFormat(
+                "pt-BR",
+                {
+                    style: "currency",
+                    currency: "BRL"
+                }
+            );
+
+            let generating = false;
+
+            function say(message, error = false) {
+                status.textContent = message;
+
+                status.classList.toggle(
+                    "share-error",
+                    error
+                );
+            }
+
+            function make(tag, text, className) {
+                const element = document.createElement(tag);
+
+                if (text !== undefined) {
+                    element.textContent = text;
+                }
+
+                if (className) {
+                    element.className = className;
+                }
+
+                return element;
+            }
+
+            function dateBR(value) {
+                return value.split("-").reverse().join("/");
+            }
+
+            async function requestJSON(url, options = {}) {
+                const controller = new AbortController();
+
+                const timer = setTimeout(
+                    () => controller.abort(),
+                    30000
+                );
+
+                try {
+                    const response = await fetch(
+                        url,
+                        {
+                            ...options,
+                            credentials: "same-origin",
+                            signal: controller.signal
+                        }
+                    );
+
+                    if (response.status === 401) {
+                        window.location.assign("/login");
+
+                        throw new Error(
+                            "Entre novamente para continuar."
+                        );
+                    }
+
+                    const type = response.headers.get(
+                        "Content-Type"
+                    ) || "";
+
+                    let data = null;
+
+                    if (type.includes("application/json")) {
+                        data = await response.json();
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(
+                            data?.error ||
+                            "Não foi possível concluir. Atualize a página e tente novamente."
+                        );
+                    }
+
+                    if (data === null) {
+                        throw new Error(
+                            "O servidor não retornou os dados esperados."
+                        );
+                    }
+
+                    return data;
+
+                } catch (error) {
+                    if (error.name === "AbortError") {
+                        throw new Error(
+                            "O servidor demorou para responder. Atualize a lista antes de gerar outro link."
+                        );
+                    }
+
+                    throw error;
+
+                } finally {
+                    clearTimeout(timer);
+                }
+            }
+
+            function showLink(url) {
+                link.value = url;
+                open.href = url;
+                result.hidden = false;
+            }
+
+            async function copy(url) {
+                showLink(url);
+
+                try {
+                    await navigator.clipboard.writeText(url);
+
+                    say(
+                        "Link copiado! Agora você pode colar na conversa com seu chefe."
+                    );
+
+                } catch {
+                    link.focus();
+                    link.select();
+
+                    link.setSelectionRange(
+                        0,
+                        link.value.length
+                    );
+
+                    say(
+                        "O navegador não copiou automaticamente. " +
+                        "O link está selecionado: pressione Ctrl + C " +
+                        "ou use Copiar no celular."
+                    );
+                }
+            }
+
+            async function loadReports() {
+                const reports = await requestJSON(
+                    "/api/reports"
+                );
+
+                list.replaceChildren();
+
+                if (!reports.length) {
+                    list.append(
+                        make(
+                            "p",
+                            "Nenhum link gerado ainda. Escolha um dos períodos acima.",
+                            "muted"
+                        )
+                    );
+
+                    return;
+                }
+
+                for (const report of reports) {
+                    const card = make(
+                        "article",
+                        undefined,
+                        "saved-report"
+                    );
+
+                    const info = make(
+                        "div",
+                        undefined,
+                        "saved-report-info"
+                    );
+
+                    info.append(
+                        make(
+                            "strong",
+                            report.title
+                        )
+                    );
+
+                    info.append(
+                        make(
+                            "p",
+                            `${dateBR(report.start)} a ` +
+                            `${dateBR(report.end)} · ` +
+                            currency.format(report.total),
+                            "muted"
+                        )
+                    );
+
+                    const generated = new Date(
+                        report.created_at
+                    );
+
+                    info.append(
+                        make(
+                            "small",
+                            "Gerado em " +
+                            generated.toLocaleString(
+                                "pt-BR",
+                                {
+                                    timeZone: "America/Sao_Paulo"
+                                }
+                            )
+                        )
+                    );
+
+                    const actions = make(
+                        "div",
+                        undefined,
+                        "share-actions"
+                    );
+
+                    if (report.active && report.url) {
+                        const view = make(
+                            "a",
+                            "Abrir",
+                            "button"
+                        );
+
+                        view.href = report.url;
+                        view.target = "_blank";
+                        view.rel = "noopener noreferrer";
+
+                        const copyButton = make(
+                            "button",
+                            "Copiar link"
+                        );
+
+                        copyButton.type = "button";
+
+                        copyButton.onclick = () => {
+                            copy(report.url);
+                        };
+
+                        const revoke = make(
+                            "button",
+                            "Desativar",
+                            "share-danger"
+                        );
+
+                        revoke.type = "button";
+
+                        revoke.onclick = async () => {
+                            revoke.disabled = true;
+
+                            try {
+                                await requestJSON(
+                                    `/api/reports/${report.id}/revoke`,
+                                    {
+                                        method: "POST",
+                                        headers: {
+                                            "X-CSRF-Token": csrf
+                                        }
+                                    }
+                                );
+
+                                if (link.value === report.url) {
+                                    result.hidden = true;
+                                    link.value = "";
+                                    open.removeAttribute("href");
+                                }
+
+                                view.remove();
+                                copyButton.remove();
+                                revoke.remove();
+
+                                actions.append(
+                                    make(
+                                        "span",
+                                        "Link desativado",
+                                        "chip"
+                                    )
+                                );
+
+                                say(
+                                    "Link desativado. A página e o PDF " +
+                                    "desse link não estão mais disponíveis."
+                                );
+
+                            } catch (error) {
+                                say(error.message, true);
+                                revoke.disabled = false;
+                            }
+                        };
+
+                        actions.append(
+                            view,
+                            copyButton,
+                            revoke
+                        );
+
+                    } else {
+                        actions.append(
+                            make(
+                                "span",
+                                "Link desativado",
+                                "chip"
+                            )
+                        );
+                    }
+
+                    card.append(
+                        info,
+                        actions
+                    );
+
+                    list.append(card);
+                }
+            }
+
+            root.querySelectorAll(
+                "form[data-report-mode]"
+            ).forEach((form) => {
+                form.addEventListener(
+                    "submit",
+                    async (event) => {
+                        event.preventDefault();
+
+                        if (
+                            generating ||
+                            !form.reportValidity()
+                        ) {
+                            return;
+                        }
+
+                        generating = true;
+
+                        const buttons = root.querySelectorAll(
+                            "button[data-generate]"
+                        );
+
+                        buttons.forEach((button) => {
+                            button.disabled = true;
+                        });
+
+                        const button = form.querySelector(
+                            "button[data-generate]"
+                        );
+
+                        const originalText = button.textContent;
+
+                        button.textContent = "Gerando…";
+
+                        const payload = {
+                            mode: form.dataset.reportMode
+                        };
+
+                        if (payload.mode === "week") {
+                            payload.anchor = document.getElementById(
+                                "share-week"
+                            ).value;
+                        }
+
+                        if (payload.mode === "month") {
+                            payload.month = document.getElementById(
+                                "share-month"
+                            ).value;
+                        }
+
+                        say(
+                            "Preparando o fechamento de todos os técnicos…"
+                        );
+
+                        try {
+                            const report = await requestJSON(
+                                "/api/reports",
+                                {
+                                    method: "POST",
+
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "X-CSRF-Token": csrf
+                                    },
+
+                                    body: JSON.stringify(payload)
+                                }
+                            );
+
+                            showLink(report.url);
+
+                            say(
+                                "Relatório gerado! Clique em Copiar link para enviar."
+                            );
+
+                            try {
+                                await loadReports();
+
+                            } catch {
+                                say(
+                                    "Relatório gerado e link disponível. " +
+                                    "Não foi possível atualizar a lista agora."
+                                );
+                            }
+
+                        } catch (error) {
+                            say(
+                                error.message +
+                                " Antes de repetir a geração, clique em " +
+                                "Atualizar lista para conferir se o relatório foi salvo.",
+                                true
+                            );
+
+                        } finally {
+                            generating = false;
+
+                            buttons.forEach((item) => {
+                                item.disabled = false;
+                            });
+
+                            button.textContent = originalText;
+                        }
+                    }
+                );
+            });
+
+            document.getElementById(
+                "share-copy"
+            ).onclick = () => {
+                copy(link.value);
+            };
+
+            document.getElementById(
+                "share-reload"
+            ).onclick = async function () {
+                this.disabled = true;
+
+                try {
+                    await loadReports();
+                    say("Lista atualizada.");
+
+                } catch (error) {
+                    say(error.message, true);
+
+                } finally {
+                    this.disabled = false;
+                }
+            };
+
+            // Seleciona o último mês encerrado.
+            const current = document.getElementById(
+                "share-week"
+            ).value;
+
+            const [year, month] = current.split("-").map(
+                Number
+            );
+
+            const previousMonth = new Date(
+                year,
+                month - 2,
+                1,
+                12
+            );
+
+            const monthValue =
+                previousMonth.getFullYear() +
+                "-" +
+                String(
+                    previousMonth.getMonth() + 1
+                ).padStart(2, "0");
+
+            const monthInput = document.getElementById(
+                "share-month"
+            );
+
+            monthInput.value = monthValue;
+            monthInput.max = monthValue;
+
+            loadReports().catch((error) => {
+                list.replaceChildren(
+                    make(
+                        "p",
+                        "Não foi possível carregar a lista. Use Atualizar lista.",
+                        "muted"
+                    )
+                );
+
+                say(error.message, true);
+            });
+        })();
+    </script>
 
 </body>
 
