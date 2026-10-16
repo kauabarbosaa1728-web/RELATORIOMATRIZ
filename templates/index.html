@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Controle de materiais, equipamentos e relatórios de gastos do Almoxarifado Matriz."
+    >
+
+    <meta
+        name="csrf-token"
+        content="{{ session.csrf }}"
+    >
+
+    <title>Relatório de Gastos Almoxarifado Matriz</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body>
+
+    <!-- MENU LATERAL -->
+
+    <aside>
+
+        <div class="logo">
+            <div class="brand-icon" aria-hidden="true">
+                M
+            </div>
+
+            <div>
+                MATRIZ
+                <small>ALMOXARIFADO</small>
+            </div>
+        </div>
+
+        <p class="eyebrow">
+            WORKSPACE / 01
+        </p>
+
+        <nav aria-label="Menu principal">
+
+            <a class="active" href="#overview">
+                ◈ Visão geral
+            </a>
+
+            <button
+                type="button"
+                onclick="openMovement()"
+            >
+                ＋ Lançar movimentação
+            </button>
+
+            <a href="#history">
+                ≡ Movimentações
+            </a>
+
+            <a href="#catalog">
+                ▦ Catálogo de custos
+            </a>
+
+        </nav>
+
+        <div class="aside-bottom">
+
+            <span class="dot" aria-hidden="true"></span>
+            Controle de materiais
+
+            <p>
+                Desenvolvido por
+                <b>KBSistemas</b>
+            </p>
+
+            <form
+                action="{{ url_for('logout') }}"
+                method="POST"
+            >
+                <input
+                    type="hidden"
+                    name="csrf"
+                    value="{{ session.csrf }}"
+                >
+
+                <button type="submit">
+                    Sair da conta ↗
+                </button>
+            </form>
+
+        </div>
+
+    </aside>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+
+    <main id="overview">
+
+        <header>
+
+            <div>
+                <p class="eyebrow">
+                    INTELIGÊNCIA DE MATERIAIS / MATRIZ
+                </p>
+
+                <h1>
+                    Relatório de gastos<span class="gold">.</span>
+                </h1>
+
+                <p class="muted">
+                    ALMOXARIFADO MATRIZ
+                    <span class="separator">/</span>
+                    Visibilidade para cada retirada.
+                </p>
+            </div>
+
+            <div class="live" role="status">
+                <span class="dot" aria-hidden="true"></span>
+                <span id="sync">Conectando</span>
+            </div>
+
+        </header>
+
+        <!-- FILTROS -->
+
+        <section
+            class="toolbar panel"
+            aria-label="Filtros do relatório"
+        >
+
+            <div class="period-tabs">
+
+                <button
+                    type="button"
+                    data-period="week"
+                >
+                    Esta semana
+                </button>
+
+                <button
+                    type="button"
+                    data-period="month"
+                    class="selected"
+                >
+                    Este mês
+                </button>
+
+            </div>
+
+            <div class="date-range">
+
+                <label for="start">
+                    De
+
+                    <input
+                        id="start"
+                        type="date"
+                        required
+                    >
+                </label>
+
+                <label for="end">
+                    Até
+
+                    <input
+                        id="end"
+                        type="date"
+                        required
+                    >
+                </label>
+
+                <button
+                    type="button"
+                    id="apply"
+                >
+                    Aplicar
+                </button>
+
+            </div>
+
+            <button
+                type="button"
+                class="primary"
+                onclick="openMovement()"
+            >
+                ＋ Nova movimentação
+            </button>
+
+        </section>
+
+        <div
+            id="message"
+            role="status"
+            aria-live="polite"
+        ></div>
+
+        <!-- INDICADORES -->
+
+        <section
+            class="kpis"
+            aria-label="Indicadores de gastos"
+        >
+
+            <article class="kpi featured">
+
+                <p>
+                    CUSTO LÍQUIDO
+                    <span aria-hidden="true">↗</span>
+                </p>
+
+                <h2 id="total">R$ 0,00</h2>
+
+                <small>
+                    Retiradas menos devoluções
+                </small>
+
+            </article>
+
+            <article class="kpi">
+
+                <p>
+                    MATERIAIS
+                    <span aria-hidden="true">▦</span>
+                </p>
+
+                <h2 id="materials">R$ 0,00</h2>
+
+                <small>
+                    Cabos, conectores e insumos
+                </small>
+
+            </article>
+
+            <article class="kpi">
+
+                <p>
+                    EQUIPAMENTOS
+                    <span aria-hidden="true">▣</span>
+                </p>
+
+                <h2 id="equipment">R$ 0,00</h2>
+
+                <small>
+                    Roteadores, ONUs e dispositivos
+                </small>
+
+            </article>
+
+            <article class="kpi">
+
+                <p>
+                    REDUÇÃO DE GASTO
+                    <span aria-hidden="true">↘</span>
+                </p>
+
+                <h2 id="difference">—</h2>
+
+                <small id="comparison">
+                    Sem base anterior
+                </small>
+
+            </article>
+
+        </section>
+
+        <!-- EVOLUÇÃO E COMPOSIÇÃO -->
+
+        <section
+            class="chart-grid"
+            aria-label="Evolução e composição dos gastos"
+        >
+
+            <article class="panel chart-panel">
+
+                <div class="section-head">
+
+                    <div>
+                        <p class="eyebrow">
+                            MOVIMENTO DO PERÍODO
+                        </p>
+
+                        <h3>Evolução dos custos</h3>
+                    </div>
+
+                    <span class="chip">
+                        Líquido diário
+                    </span>
+
+                </div>
+
+                <div
+                    id="timeline"
+                    class="timeline"
+                ></div>
+
+                <div class="chart-foot">
+
+                    <span>
+                        <i class="dot" aria-hidden="true"></i>
+                        Custos líquidos em reais
+                    </span>
+
+                    <span id="count">
+                        0 movimentações
+                    </span>
+
+                </div>
+
+            </article>
+
+            <article class="panel">
+
+                <div class="section-head">
+
+                    <div>
+                        <p class="eyebrow">
+                            DISTRIBUIÇÃO
+                        </p>
+
+                        <h3>Composição dos gastos</h3>
+                    </div>
+
+                    <span aria-hidden="true">◉</span>
+
+                </div>
+
+                <div
+                    class="donut"
+                    id="donut"
+                >
+                    <div>
+                        <small>VALOR LÍQUIDO</small>
+
+                        <strong id="donut-value">
+                            R$ 0,00
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="legend">
+
+                    <span>
+                        <i class="dot" aria-hidden="true"></i>
+                        Materiais
+
+                        <b id="mat-share">—</b>
+                    </span>
+
+                    <span>
+                        <i
+                            class="dot gold-bg"
+                            aria-hidden="true"
+                        ></i>
+                        Equipamentos
+
+                        <b id="eq-share">—</b>
+                    </span>
+
+                </div>
+
+            </article>
+
+        </section>
+
+        <!-- CUSTOS POR TÉCNICO E POR ITEM -->
+
+        <section
+            class="chart-grid equal"
+            aria-label="Custos por técnico e item"
+        >
+
+            <article class="panel">
+
+                <div class="section-head">
+
+                    <div>
+                        <p class="eyebrow">
+                            EQUIPE / {{ technicians | length }} TÉCNICOS
+                        </p>
+
+                        <h3>Custo por técnico</h3>
+                    </div>
+
+                    <span class="chip">
+                        Valor líquido
+                    </span>
+
+                </div>
+
+                <div
+                    id="technician-bars"
+                    class="bars"
+                ></div>
+
+            </article>
+
+            <article class="panel">
+
+                <div class="section-head">
+
+                    <div>
+                        <p class="eyebrow">
+                            ONDE ESTÁ O CUSTO
+                        </p>
+
+                        <h3>Itens de maior impacto</h3>
+                    </div>
+
+                    <span class="chip">
+                        Top 8
+                    </span>
+
+                </div>
+
+                <div
+                    id="item-bars"
+                    class="bars"
+                ></div>
+
+                <div class="insight">
+
+                    <span aria-hidden="true">↩</span>
+
+                    <div>
+
+                        <small>VALOR DEVOLVIDO</small>
+
+                        <strong id="returns">
+                            R$ 0,00
+                        </strong>
+
+                        <p>
+                            Devoluções reduzem o custo líquido
+                            e mantêm vínculo com a retirada original.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </article>
+
+        </section>
+
+        <!-- HISTÓRICO E EXPORTAÇÕES -->
+
+        <section
+            id="history"
+            class="panel"
+        >
+
+            <div class="section-head">
+
+                <div>
+                    <p class="eyebrow">
+                        RASTREABILIDADE
+                    </p>
+
+                    <h3>Movimentações do período</h3>
+                </div>
+
+                <div class="actions">
+
+                    <a
+                        id="csv"
+                        class="button"
+                        href="{{ url_for('csv_report') }}"
+                    >
+                        ↓ CSV
+                    </a>
+
+                    <a
+                        id="pdf"
+                        class="button"
+                        href="{{ url_for('pdf_report') }}"
+                    >
+                        ↓ Relatório PDF
+                    </a>
+
+                </div>
+
+            </div>
+
+            <div class="table-wrap">
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th scope="col">Data</th>
+                            <th scope="col">Técnico</th>
+                            <th scope="col">Material / equipamento</th>
+                            <th scope="col">Tipo</th>
+                            <th scope="col">Quantidade</th>
+                            <th scope="col">Valor líquido</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="rows"></tbody>
+
+                </table>
+
+            </div>
+
+            <p class="muted footnote">
+                Comparação com o período imediatamente anterior
+                de igual duração. Redução de gasto não comprova
+                menor desperdício. Retirada não confirma consumo final.
+            </p>
+
+        </section>
+
+        <!-- CATÁLOGO -->
+
+        <section
+            id="catalog"
+            class="panel"
+        >
+
+            <div class="section-head">
+
+                <div>
+                    <p class="eyebrow">
+                        BASE DE CÁLCULO
+                    </p>
+
+                    <h3>Catálogo de custos</h3>
+                </div>
+
+                <span class="chip">
+                    {{ items | length }} itens cadastrados
+                </span>
+
+            </div>
+
+            <div class="table-wrap">
+
+                <table>
+
+                    <thead>
+                        <tr>
+                            <th scope="col">Item</th>
+                            <th scope="col">Categoria</th>
+                            <th scope="col">Unidade de lançamento</th>
+                            <th scope="col">Custo de referência</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        {% for item in items %}
+                            <tr>
+
+                                <td>{{ item.name }}</td>
+
+                                <td>
+                                    {% if item.category == 'material' %}
+                                        Material
+                                    {% else %}
+                                        Equipamento
+                                    {% endif %}
+                                </td>
+
+                                <td>{{ item.unit }}</td>
+
+                                <td>
+                                    R$ {{ ('%.6f' | format(item.cost)).replace('.', ',') }}
+                                </td>
+
+                            </tr>
+                        {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <p class="footnote muted">
+                Abraçadeira: R$ 20,80 / 100 un ·
+                Miguelão: R$ 31,00 / 100 un ·
+                Cabo de rede: R$ 175,30 / 305 m ·
+                Miniflatdrop: R$ 390,90 / 1.000 m.
+                Fita isolante considerada por rolo.
+            </p>
+
+        </section>
+
+        <footer>
+            MATRIZ
+            <span>/</span>
+            Relatórios que transformam registros em decisões.
+
+            <form
+                action="{{ url_for('logout') }}"
+                method="POST"
+            >
+                <input
+                    type="hidden"
+                    name="csrf"
+                    value="{{ session.csrf }}"
+                >
+
+                <button type="submit">
+                    Sair da conta ↗
+                </button>
+            </form>
+        </footer>
+
+    </main>
+
+    <!-- JANELA DE LANÇAMENTO -->
+
+    <dialog
+        id="movement-dialog"
+        aria-labelledby="movement-title"
+    >
+
+        <form id="movement-form">
+
+            <div class="section-head">
+
+                <div>
+                    <p class="eyebrow">
+                        NOVO REGISTRO
+                    </p>
+
+                    <h3 id="movement-title">
+                        Movimentação
+                    </h3>
+                </div>
+
+                <button
+                    type="button"
+                    onclick="document.getElementById('movement-dialog').close()"
+                    aria-label="Fechar janela"
+                >
+                    ✕
+                </button>
+
+            </div>
+
+            <label for="kind">
+                Tipo
+
+                <select
+                    id="kind"
+                    name="kind"
+                >
+                    <option value="retirada">
+                        Retirada
+                    </option>
+
+                    <option value="devolucao">
+                        Devolução sem uso
+                    </option>
+                </select>
+            </label>
+
+            <label for="movement-date">
+                Data
+
+                <input
+                    type="date"
+                    id="movement-date"
+                    name="date"
+                    value="{{ today }}"
+                    max="{{ today }}"
+                    required
+                >
+            </label>
+
+            <div id="withdraw-fields">
+
+                <label for="technician-select">
+                    Técnico
+
+                    <select
+                        id="technician-select"
+                        name="technician_id"
+                    >
+                        {% for technician in technicians %}
+                            <option value="{{ technician.id }}">
+                                {{ technician.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label for="item-select">
+                    Item
+
+                    <select
+                        name="item_id"
+                        id="item-select"
+                    >
+                        {% for item in items %}
+                            <option
+                                value="{{ item.id }}"
+                                data-unit="{{ item.unit }}"
+                                data-cost="{{ item.cost }}"
+                            >
+                                {{ item.name }} ({{ item.unit }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+            </div>
+
+            <label
+                id="return-fields"
+                for="original"
+                hidden
+            >
+                Retirada original
+
+                <select
+                    name="original_id"
+                    id="original"
+                ></select>
+            </label>
+
+            <label for="quantity">
+                Quantidade
+
+                <span id="unit-hint"></span>
+
+                <input
+                    type="number"
+                    name="quantity"
+                    id="quantity"
+                    min="0.001"
+                    max="1000000"
+                    step="0.001"
+                    required
+                >
+            </label>
+
+            <label for="movement-note">
+                Observação
+
+                <input
+                    type="text"
+                    id="movement-note"
+                    name="note"
+                    maxlength="300"
+                    placeholder="Ex.: retirada para reposição da equipe"
+                >
+            </label>
+
+            <p
+                id="form-error"
+                role="alert"
+                aria-live="polite"
+            ></p>
+
+            <button
+                type="submit"
+                class="primary"
+                id="save"
+            >
+                Salvar movimentação →
+            </button>
+
+        </form>
+
+    </dialog>
+
+    <script
+        src="{{ url_for('static', filename='app.js') }}"
+        defer
+    ></script>
+
+</body>
+
+</html>
