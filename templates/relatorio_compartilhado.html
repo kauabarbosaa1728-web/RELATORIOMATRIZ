@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="robots"
+        content="noindex, nofollow, noarchive"
+    >
+
+    <meta
+        name="referrer"
+        content="no-referrer"
+    >
+
+    <title>{{ report.title }} | Almoxarifado Matriz</title>
+
+    <style>
+        :root {
+            --bg: #0c1413;
+            --panel: #14211d;
+            --line: #304d40;
+            --text: #eef5ef;
+            --muted: #a2b9ab;
+            --green: #42dfac;
+            --gold: #e5c181;
+            --coral: #f39684;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(
+                    ellipse at top right,
+                    #20473377,
+                    transparent 55%
+                ),
+                var(--bg);
+            color: var(--text);
+            font-family: "Segoe UI", Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        main {
+            max-width: 1280px;
+            margin: auto;
+            padding: 38px 24px;
+        }
+
+        .topbar,
+        .heading,
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .topbar {
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+        }
+
+        .brand-icon {
+            display: grid;
+            place-items: center;
+            width: 44px;
+            height: 44px;
+            border: 1px solid #96f4cb;
+            border-radius: 12px;
+            background: linear-gradient(145deg, #55e5b4, #167454);
+            color: #07291b;
+            font-size: 28px;
+            font-weight: 800;
+        }
+
+        .brand strong {
+            display: block;
+            font-size: 19px;
+            letter-spacing: 3px;
+        }
+
+        .brand small {
+            color: var(--muted);
+            font-size: 9px;
+            letter-spacing: 2px;
+        }
+
+        .tag {
+            padding: 7px 12px;
+            border: 1px solid #59754f;
+            border-radius: 30px;
+            color: #c4ddbd;
+            font-size: 11px;
+        }
+
+        .heading {
+            align-items: flex-start;
+            padding: 34px 0 25px;
+        }
+
+        .eyebrow {
+            margin: 0 0 9px;
+            color: var(--gold);
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 2px;
+        }
+
+        h1 {
+            margin: 0 0 13px;
+            font-size: clamp(26px, 4vw, 39px);
+            line-height: 1.2;
+            letter-spacing: -1px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        h3 {
+            margin: 0;
+            font-size: 17px;
+        }
+
+        p {
+            margin: 8px 0;
+        }
+
+        .muted,
+        .metadata {
+            color: var(--muted);
+        }
+
+        .metadata {
+            font-size: 12px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 11px 16px;
+            border: 1px solid #50715c;
+            border-radius: 8px;
+            background: #203629;
+            color: var(--text);
+            font: inherit;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .primary {
+            border-color: #86efc4;
+            background: var(--green);
+            color: #08291b;
+        }
+
+        .button:hover {
+            border-color: var(--gold);
+        }
+
+        :focus-visible {
+            outline: 2px solid var(--gold);
+            outline-offset: 4px;
+        }
+
+        .notice {
+            margin-bottom: 24px;
+            padding: 15px 18px;
+            border: 1px solid #70613b;
+            border-radius: 10px;
+            background: #5b461d22;
+            color: #e9d8ac;
+            font-size: 13px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card,
+        .panel {
+            min-width: 0;
+            padding: 23px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background: linear-gradient(130deg, #182a21, #111e19);
+        }
+
+        .card.featured {
+            border-color: #4d9a74;
+            background: linear-gradient(120deg, #204c34, #162a20);
+        }
+
+        .card small {
+            color: var(--muted);
+            font-size: 10px;
+            letter-spacing: 1px;
+        }
+
+        .card strong {
+            display: block;
+            margin: 18px 0 8px;
+            font-size: clamp(22px, 2.5vw, 31px);
+            line-height: 1.2;
+            letter-spacing: -0.8px;
+            overflow-wrap: anywhere;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .card p {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .featured strong,
+        .positive {
+            color: var(--green);
+        }
+
+        .negative {
+            color: var(--coral);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+            margin-bottom: 24px;
+        }
+
+        .panel {
+            margin-bottom: 24px;
+        }
+
+        .grid > .panel {
+            margin-bottom: 0;
+        }
+
+        .section-heading {
+            margin-bottom: 23px;
+        }
+
+        .section-heading small {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .bar-row {
+            margin-bottom: 18px;
+        }
+
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 7px;
+            font-size: 12px;
+        }
+
+        .bar-label strong {
+            flex-shrink: 0;
+            font-weight: 500;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .track {
+            height: 7px;
+            overflow: hidden;
+            border-radius: 5px;
+            background: #293e30;
+        }
+
+        .fill {
+            height: 100%;
+            border-radius: 5px;
+            background: linear-gradient(90deg, #23815b, #49dfaa);
+        }
+
+        .fill.gold {
+            background: linear-gradient(90deg, #9b783a, #e5c181);
+        }
+
+        .fill.negative {
+            background: var(--coral);
+        }
+
+        .summary-line {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            padding: 13px 0;
+            border-bottom: 1px solid #2b4234;
+            font-size: 13px;
+        }
+
+        .summary-line strong {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .footnote {
+            margin-top: 20px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.8;
+        }
+
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th,
+        td {
+            padding: 13px 10px;
+            border-bottom: 1px solid #2b4234;
+            font-size: 12px;
+        }
+
+        th {
+            color: var(--muted);
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+        }
+
+        td:last-child {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .empty {
+            padding: 28px 10px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        details {
+            margin-top: 13px;
+            overflow: hidden;
+            border: 1px solid #35513e;
+            border-radius: 10px;
+        }
+
+        summary {
+            padding: 16px;
+            background: #1c3023;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        details .table-wrap {
+            padding: 0 10px 12px;
+        }
+
+        details .empty {
+            margin: 0;
+        }
+
+        .note-cell {
+            min-width: 160px;
+            max-width: 320px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+
+        footer {
+            padding: 8px 0 20px;
+            color: var(--muted);
+            font-size: 11px;
+            text-align: center;
+        }
+
+        @media (max-width: 900px) {
+            .cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .heading {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 650px) {
+            main {
+                padding: 22px 15px;
+            }
+
+            .grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .card,
+            .panel {
+                padding: 18px;
+            }
+
+            .cards {
+                gap: 10px;
+            }
+
+            .card strong {
+                font-size: 23px;
+            }
+
+            .tag {
+                font-size: 9px;
+                padding: 6px 9px;
+            }
+
+            .section-heading {
+                flex-wrap: wrap;
+            }
+
+            .actions {
+                width: 100%;
+            }
+
+            .actions .button {
+                flex: 1;
+            }
+        }
+
+        @media print {
+            :root {
+                --text: #15261b;
+                --muted: #46594b;
+                --green: #176a44;
+                --gold: #78602e;
+                --coral: #a53424;
+                --line: #b8c6bc;
+            }
+
+            body {
+                background: white;
+                color: var(--text);
+            }
+
+            main {
+                max-width: none;
+                padding: 0;
+            }
+
+            .actions,
+            .tag {
+                display: none;
+            }
+
+            .card,
+            .card.featured,
+            .panel,
+            summary,
+            .notice {
+                background: white;
+                box-shadow: none;
+            }
+
+            .card,
+            .bar-row {
+                break-inside: avoid;
+            }
+
+            .grid {
+                display: block;
+            }
+
+            .grid > .panel {
+                margin-bottom: 20px;
+            }
+
+            .table-wrap {
+                overflow: visible;
+            }
+
+            table {
+                white-space: normal;
+            }
+
+            th,
+            td {
+                padding: 7px 5px;
+                font-size: 9px;
+            }
+
+            thead {
+                display: table-header-group;
+            }
+
+            tr {
+                break-inside: avoid;
+            }
+
+            .track {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .fill {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .notice {
+                color: #5f4a20;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+{% macro date_br(value) -%}
+    {{ value.split('-') | reverse | join('/') }}
+{%- endmacro %}
+
+{% macro quantity_br(value) -%}
+    {{ ('%.3f' | format(value)).rstrip('0').rstrip('.').replace('.', ',') }}
+{%- endmacro %}
+
+{% set technician_scale = namespace(maximum=1) %}
+
+{% for name, value in data['technicians'].items() %}
+    {% if (value | abs) > technician_scale.maximum %}
+        {% set technician_scale.maximum = value | abs %}
+    {% endif %}
+{% endfor %}
+
+{% set item_scale = namespace(maximum=1) %}
+
+{% for name, value in data['items'].items() %}
+    {% if (value | abs) > item_scale.maximum %}
+        {% set item_scale.maximum = value | abs %}
+    {% endif %}
+{% endfor %}
+
+<main>
+
+    <div class="topbar">
+
+        <div class="brand">
+            <div class="brand-icon" aria-hidden="true">M</div>
+
+            <div>
+                <strong>MATRIZ</strong>
+                <small>ALMOXARIFADO</small>
+            </div>
+        </div>
+
+        <span class="tag">
+            Relatório compartilhado
+        </span>
+
+    </div>
+
+    <header class="heading">
+
+        <div>
+            <p class="eyebrow">
+                RELATÓRIO DE GASTOS ALMOXARIFADO MATRIZ
+            </p>
+
+            <h1>{{ report.title }}</h1>
+
+            <p class="muted">
+                Período:
+                <strong>{{ date_br(data['start']) }}</strong>
+                a
+                <strong>{{ date_br(data['end']) }}</strong>
+            </p>
+
+            <p class="metadata">
+                Gerado em {{ data['issued_at'] }} — horário de Brasília.
+                <br>
+                {{ data['technicians'] | length }} técnicos ·
+                {{ data['count'] }} movimentações.
+            </p>
+        </div>
+
+        <div class="actions">
+
+            <a
+                class="button primary"
+                href="{{ url_for('shared_report_pdf', token=report.token) }}"
+            >
+                ↓ Baixar PDF
+            </a>
+
+            <button
+                class="button"
+                type="button"
+                onclick="window.print()"
+            >
+                Imprimir
+            </button>
+
+        </div>
+
+    </header>
+
+    {% if data['partial'] %}
+        <div class="notice">
+            <strong>Semana em andamento.</strong>
+            Este relatório inclui os registros disponíveis de segunda-feira
+            até {{ date_br(data['end']) }}, no momento da geração.
+            Para fechar a semana completa, gere outro relatório após concluir
+            os lançamentos de sexta-feira.
+        </div>
+    {% endif %}
+
+    <section class="cards" aria-label="Resumo financeiro">
+
+        <article class="card featured">
+            <small>CUSTO LÍQUIDO</small>
+            <strong>{{ data['total'] | money }}</strong>
+            <p>Retiradas menos devoluções.</p>
+        </article>
+
+        <article class="card">
+            <small>MATERIAIS</small>
+            <strong>{{ data['materials'] | money }}</strong>
+            <p>Cabos, conectores e insumos.</p>
+        </article>
+
+        <article class="card">
+            <small>EQUIPAMENTOS</small>
+            <strong>{{ data['equipment'] | money }}</strong>
+            <p>Roteadores, ONUs e dispositivos.</p>
+        </article>
+
+        <article class="card">
+            <small>
+                {% if data['has_previous'] and data['difference'] < 0 %}
+                    AUMENTO DE GASTO
+                {% else %}
+                    REDUÇÃO DE GASTO
+                {% endif %}
+            </small>
+
+            {% if data['has_previous'] %}
+
+                <strong
+                    class="{{ 'negative' if data['difference'] < 0 else 'positive' }}"
+                >
+                    {{ (data['difference'] | abs) | money }}
+                </strong>
+
+                <p>
+                    {% if data['percent'] is not none %}
+                        {{ ('%.1f' | format(data['percent'] | abs)).replace('.', ',') }}%
+                        {% if data['difference'] < 0 %}
+                            a mais
+                        {% elif data['difference'] > 0 %}
+                            a menos
+                        {% else %}
+                            de variação
+                        {% endif %}
+                        em relação à base anterior.
+                    {% else %}
+                        Base anterior sem valor positivo para calcular percentual.
+                    {% endif %}
+                </p>
+
+            {% else %}
+
+                <strong>—</strong>
+                <p>Sem registros na base anterior.</p>
+
+            {% endif %}
+        </article>
+
+    </section>
+
+    <div class="grid">
+
+        <section class="panel">
+
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">DISTRIBUIÇÃO POR EQUIPE</p>
+                    <h2>Custo líquido por técnico</h2>
+                </div>
+            </div>
+
+            {% for name, value in data['technicians'].items() %}
+
+                <div class="bar-row">
+
+                    <div class="bar-label">
+                        <span>{{ name }}</span>
+
+                        <strong class="{{ 'negative' if value < 0 else '' }}">
+                            {{ value | money }}
+                        </strong>
+                    </div>
+
+                    <div class="track" aria-hidden="true">
+                        <div
+                            class="fill {{ 'negative' if value < 0 else '' }}"
+                            style="width: {{ ((value | abs) / technician_scale.maximum * 100) | round(2) }}%;"
+                        ></div>
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+            <p class="footnote">
+                Todos os técnicos estão incluídos, mesmo sem movimentações.
+                Os valores representam retiradas menos devoluções no período.
+            </p>
+
+        </section>
+
+        <section class="panel">
+
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">MATERIAIS E EQUIPAMENTOS</p>
+                    <h2>Itens de maior impacto</h2>
+                </div>
+
+                <small>Até 8 itens</small>
+            </div>
+
+            {% for name, value in data['items'].items() %}
+
+                <div class="bar-row">
+
+                    <div class="bar-label">
+                        <span>{{ name }}</span>
+                        <strong>{{ value | money }}</strong>
+                    </div>
+
+                    <div class="track" aria-hidden="true">
+                        <div
+                            class="fill {{ 'negative' if value < 0 else 'gold' }}"
+                            style="width: {{ ((value | abs) / item_scale.maximum * 100) | round(2) }}%;"
+                        ></div>
+                    </div>
+
+                </div>
+
+            {% else %}
+
+                <p class="empty">
+                    Nenhum item movimentado neste período.
+                </p>
+
+            {% endfor %}
+
+        </section>
+
+    </div>
+
+    <div class="grid">
+
+        <section class="panel">
+
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">FECHAMENTO</p>
+                    <h2>Resumo das movimentações</h2>
+                </div>
+            </div>
+
+            <div class="summary-line">
+                <span>Total de retiradas</span>
+                <strong>{{ data['withdrawals'] | money }}</strong>
+            </div>
+
+            <div class="summary-line">
+                <span>Total de devoluções</span>
+                <strong>{{ data['returns'] | money }}</strong>
+            </div>
+
+            <div class="summary-line">
+                <span>Custo líquido</span>
+                <strong>{{ data['total'] | money }}</strong>
+            </div>
+
+            <div class="summary-line">
+                <span>Quantidade de registros</span>
+                <strong>{{ data['count'] }}</strong>
+            </div>
+
+            <p class="footnote">
+                Devoluções entram pela data em que foram registradas.
+                Por isso, uma devolução de retirada antiga pode reduzir
+                o custo líquido deste período.
+            </p>
+
+        </section>
+
+        <section class="panel">
+
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">COMPARAÇÃO</p>
+                    <h2>Base do período anterior</h2>
+                </div>
+            </div>
+
+            <div class="summary-line">
+                <span>Início da base</span>
+                <strong>{{ date_br(data['previous_start']) }}</strong>
+            </div>
+
+            <div class="summary-line">
+                <span>Fim da base</span>
+                <strong>{{ date_br(data['previous_end']) }}</strong>
+            </div>
+
+            <div class="summary-line">
+                <span>Custo líquido anterior</span>
+                <strong>{{ data['previous'] | money }}</strong>
+            </div>
+
+            <p class="footnote">
+                {{ data['comparison_note'] }}
+                <br>
+                Redução de gasto não comprova menor desperdício:
+                a quantidade de trabalho pode variar entre os períodos.
+                Retirada não confirma consumo final.
+            </p>
+
+        </section>
+
+    </div>
+
+    <section class="panel">
+
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">EVOLUÇÃO</p>
+                <h2>Custo líquido por dia</h2>
+            </div>
+
+            <small>Dias com movimentações</small>
+        </div>
+
+        <div class="table-wrap">
+
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Data</th>
+                        <th scope="col">Custo líquido</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for day, value in data['daily'].items() | sort %}
+                        <tr>
+                            <td>{{ date_br(day) }}</td>
+
+                            <td class="{{ 'negative' if value < 0 else '' }}">
+                                {{ value | money }}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="2" class="empty">
+                                Sem movimentações no período.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        </div>
+
+    </section>
+
+    <section class="panel">
+
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">DETALHAMENTO DA EQUIPE</p>
+                <h2>Retiradas e devoluções por técnico</h2>
+            </div>
+
+            <small>Clique no nome para expandir</small>
+        </div>
+
+        {% for name, value in data['technicians'].items() %}
+
+            {% set technician_movements = data['movements']
+                | selectattr('technician', 'equalto', name)
+                | list
+            %}
+
+            <details>
+
+                <summary>
+                    {{ name }} · {{ value | money }}
+                    · {{ technician_movements | length }} registros
+                </summary>
+
+                {% if technician_movements %}
+
+                    <div class="table-wrap">
+
+                        <table>
+
+                            <thead>
+                                <tr>
+                                    <th scope="col">Data</th>
+                                    <th scope="col">Item</th>
+                                    <th scope="col">Categoria</th>
+                                    <th scope="col">Tipo</th>
+                                    <th scope="col">Quantidade</th>
+                                    <th scope="col">Valor líquido</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+
+                                {% for movement in technician_movements %}
+                                    <tr>
+
+                                        <td>
+                                            {{ date_br(movement['date']) }}
+                                        </td>
+
+                                        <td>{{ movement['item'] }}</td>
+
+                                        <td>
+                                            {{ 'Material' if movement['category'] == 'material' else 'Equipamento' }}
+                                        </td>
+
+                                        <td>
+                                            {{ 'Retirada' if movement['kind'] == 'retirada' else 'Devolução' }}
+                                        </td>
+
+                                        <td>
+                                            {{ quantity_br(movement['quantity']) }}
+                                            {{ movement['unit'] }}
+                                        </td>
+
+                                        <td class="{{ 'negative' if movement['total'] < 0 else '' }}">
+                                            {{ movement['total'] | money }}
+                                        </td>
+
+                                    </tr>
+                                {% endfor %}
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                {% else %}
+
+                    <p class="empty">
+                        Sem movimentações deste técnico no período.
+                    </p>
+
+                {% endif %}
+
+            </details>
+
+        {% endfor %}
+
+    </section>
+
+    <section class="panel">
+
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">HISTÓRICO COMPLETO</p>
+                <h2>Todas as movimentações do fechamento</h2>
+            </div>
+        </div>
+
+        <div class="table-wrap">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th scope="col">Data</th>
+                        <th scope="col">Técnico</th>
+                        <th scope="col">Item</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Quantidade</th>
+                        <th scope="col">Observação</th>
+                        <th scope="col">Valor líquido</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+
+                    {% for movement in data['movements'] %}
+                        <tr>
+
+                            <td>
+                                {{ date_br(movement['date']) }}
+                            </td>
+
+                            <td>{{ movement['technician'] }}</td>
+
+                            <td>{{ movement['item'] }}</td>
+
+                            <td>
+                                {{ 'Retirada' if movement['kind'] == 'retirada' else 'Devolução' }}
+                            </td>
+
+                            <td>
+                                {{ quantity_br(movement['quantity']) }}
+                                {{ movement['unit'] }}
+                            </td>
+
+                            <td class="note-cell">
+                                {{ movement['note'] or '—' }}
+                            </td>
+
+                            <td class="{{ 'negative' if movement['total'] < 0 else '' }}">
+                                {{ movement['total'] | money }}
+                            </td>
+
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="empty">
+                                Nenhuma movimentação registrada neste período.
+                            </td>
+                        </tr>
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <p class="footnote">
+            Este relatório preserva os dados existentes no momento da geração.
+            Movimentações lançadas depois não alteram este fechamento.
+        </p>
+
+    </section>
+
+    <footer>
+        RELATÓRIO DE GASTOS ALMOXARIFADO MATRIZ
+        <br>
+        Desenvolvido por KBSistemas · Consulta somente para leitura.
+    </footer>
+
+</main>
+
+</body>
+
+</html>
