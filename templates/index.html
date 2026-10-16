@@ -572,7 +572,11 @@
                                 <td>{{ item.unit }}</td>
 
                                 <td>
-                                    R$ {{ ('%.6f' | format(item.cost)).replace('.', ',') }}
+                                   {% if item.category == 'equipamento' %}
+    {{ item.cost | money }}
+{% else %}
+    R$ {{ ('%.6f' | format(item.cost)).rstrip('0').rstrip('.').replace('.', ',') }}
+{% endif %}
                                 </td>
 
                             </tr>
