@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="Acesso ao Relatório de Gastos Almoxarifado Matriz."
+    >
+
+    <title>Entrar | Almoxarifado Matriz</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+</head>
+
+<body class="login">
+
+    <main class="login-card panel">
+
+        <div class="brand-icon" aria-hidden="true">
+            M
+        </div>
+
+        <p class="eyebrow">
+            CONTROLE & INTELIGÊNCIA
+        </p>
+
+        <h1>
+            Almoxarifado
+            <br>
+            <span>Matriz.</span>
+        </h1>
+
+        <p class="muted">
+            Seus materiais. Seus números. Suas decisões.
+        </p>
+
+        <form
+            action="{{ url_for('login') }}"
+            method="POST"
+        >
+
+            <input
+                type="hidden"
+                name="csrf"
+                value="{{ session.csrf }}"
+            >
+
+            <label for="username">
+                Usuário
+
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    placeholder="Digite seu usuário"
+                    autocomplete="username"
+                    autocapitalize="none"
+                    spellcheck="false"
+                    maxlength="80"
+                    required
+                    autofocus
+                >
+            </label>
+
+            <label for="password">
+                Senha
+
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="Digite sua senha"
+                    autocomplete="current-password"
+                    required
+                >
+            </label>
+
+            {% if error %}
+                <p id="form-error" role="alert">
+                    {{ error }}
+                </p>
+            {% endif %}
+
+            <button
+                type="submit"
+                class="primary"
+            >
+                Entrar no painel →
+            </button>
+
+        </form>
+
+        <small>
+            Acesso interno • KBSistemas
+        </small>
+
+    </main>
+
+</body>
+
+</html>
