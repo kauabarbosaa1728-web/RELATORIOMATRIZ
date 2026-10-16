@@ -19,9 +19,13 @@ from flask import (
     abort,
     send_file,
 )
+
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import select, func
-from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import select, func, MetaData, text
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
 
 
 # CONFIGURAÇÃO
@@ -33,23 +37,52 @@ database_url = os.environ.get(
     "sqlite:///matriz.db",
 ).replace("postgres://", "postgresql://", 1)
 
+# Usa o driver instalado em requirements.txt.
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace(
+        "postgresql://",
+        "postgresql+psycopg2://",
+        1,
+    )
+
 app.config.update(
-    SECRET_KEY=os.environ.get("SECRET_KEY") or secrets.token_hex(32),
+    SECRET_KEY=(
+        os.environ.get("SECRET_KEY")
+        or secrets.token_hex(32)
+    ),
     SQLALCHEMY_DATABASE_URI=database_url,
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE") == "1",
+    SESSION_COOKIE_SECURE=(
+        os.environ.get("COOKIE_SECURE") == "1"
+    ),
     MAX_CONTENT_LENGTH=1024 * 1024,
 )
 
-db = SQLAlchemy(app)
+# No PostgreSQL, todas as tabelas deste sistema
+# ficam dentro do schema relatorio_matriz.
+REPORT_SCHEMA = (
+    "relatorio_matriz"
+    if database_url.startswith("postgresql")
+    else None
+)
+
+db = SQLAlchemy(
+    app,
+    metadata=MetaData(schema=REPORT_SCHEMA),
+)
 
 
 # BANCO DE DADOS
 
 class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = "user"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     username = db.Column(
         db.String(80),
@@ -64,7 +97,12 @@ class User(db.Model):
 
 
 class Technician(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = "technician"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     name = db.Column(
         db.String(80),
@@ -74,7 +112,12 @@ class Technician(db.Model):
 
 
 class Item(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = "item"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     name = db.Column(
         db.String(100),
@@ -99,7 +142,12 @@ class Item(db.Model):
 
 
 class Movement(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    __tablename__ = "movement"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     day = db.Column(
         db.Date,
@@ -124,7 +172,7 @@ class Movement(db.Model):
         nullable=False,
     )
 
-    # Guarda o preço utilizado na data do lançamento.
+    # Preço histórico utilizado no lançamento.
     cost = db.Column(
         db.Numeric(18, 9),
         nullable=False,
@@ -135,7 +183,7 @@ class Movement(db.Model):
         nullable=False,
     )
 
-    # Nas devoluções, identifica a retirada original.
+    # Identifica a retirada original nas devoluções.
     original_id = db.Column(
         db.Integer,
         db.ForeignKey("movement.id"),
@@ -224,6 +272,17 @@ app.jinja_env.filters["money"] = money
 
 
 def init_db():
+    # Cria a área exclusiva do relatório.
+    # Não altera o schema das outras aplicações.
+    if REPORT_SCHEMA:
+        with db.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "CREATE SCHEMA IF NOT EXISTS relatorio_matriz"
+                )
+            )
+
+    # Cria apenas as tabelas declaradas neste aplicativo.
     db.create_all()
 
     for name in TECHNICIANS:
@@ -290,7 +349,9 @@ def init_db():
                     "ADMIN_USERNAME",
                     "admin",
                 ),
-                password=generate_password_hash(password),
+                password=generate_password_hash(
+                    password
+                ),
             )
         )
 
@@ -302,8 +363,8 @@ def init_command():
     init_db()
 
     print(
-        "Banco inicializado. Cadastros prontos, "
-        "sem movimentações fictícias."
+        "Banco do relatório inicializado. "
+        "Cadastros prontos, sem movimentações fictícias."
     )
 
 
@@ -316,7 +377,9 @@ def protected(function):
                     error="Sessão encerrada. Entre novamente."
                 ), 401
 
-            return redirect(url_for("login"))
+            return redirect(
+                url_for("login")
+            )
 
         return function(*args, **kwargs)
 
@@ -377,7 +440,9 @@ def login():
             session["user"] = user.id
             session["csrf"] = secrets.token_hex(32)
 
-            return redirect(url_for("index"))
+            return redirect(
+                url_for("index")
+            )
 
         error = "Usuário ou senha incorretos."
 
@@ -391,7 +456,9 @@ def login():
 def logout():
     session.clear()
 
-    return redirect(url_for("login"))
+    return redirect(
+        url_for("login")
+    )
 
 
 # PÁGINA PRINCIPAL
@@ -697,6 +764,11 @@ def withdrawals():
 def create_movement():
     data = request.get_json(silent=True) or {}
 
+    if not isinstance(data, dict):
+        return jsonify(
+            error="Dados inválidos."
+        ), 400
+
     try:
         day = date.fromisoformat(
             data.get("date", "")
@@ -887,13 +959,13 @@ def csv_report():
         "Observação",
     ])
 
-    def safe(text):
-        if text.startswith(
+    def safe(value):
+        if value.startswith(
             ("=", "+", "-", "@", "\t", "\r")
         ):
-            return "'" + text
+            return "'" + value
 
-        return text
+        return value
 
     for movement in records(start, end):
         writer.writerow([
@@ -998,7 +1070,7 @@ def pdf_report():
 
         y = 495
 
-    def line(text, bold=False):
+    def line(value, bold=False):
         nonlocal y
 
         if y < 35:
@@ -1012,7 +1084,11 @@ def pdf_report():
             10,
         )
 
-        pdf.drawString(30, y, text)
+        pdf.drawString(
+            30,
+            y,
+            value,
+        )
 
         y -= 18
 
