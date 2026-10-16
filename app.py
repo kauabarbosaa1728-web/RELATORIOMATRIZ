@@ -37,7 +37,6 @@ database_url = os.environ.get(
     "sqlite:///matriz.db",
 ).replace("postgres://", "postgresql://", 1)
 
-# Usa o driver instalado em requirements.txt.
 if database_url.startswith("postgresql://"):
     database_url = database_url.replace(
         "postgresql://",
@@ -60,8 +59,6 @@ app.config.update(
     MAX_CONTENT_LENGTH=1024 * 1024,
 )
 
-# No PostgreSQL, todas as tabelas deste sistema
-# ficam dentro do schema relatorio_matriz.
 REPORT_SCHEMA = (
     "relatorio_matriz"
     if database_url.startswith("postgresql")
@@ -79,10 +76,7 @@ db = SQLAlchemy(
 class User(db.Model):
     __tablename__ = "user"
 
-    id = db.Column(
-        db.Integer,
-        primary_key=True,
-    )
+    id = db.Column(db.Integer, primary_key=True)
 
     username = db.Column(
         db.String(80),
@@ -99,10 +93,7 @@ class User(db.Model):
 class Technician(db.Model):
     __tablename__ = "technician"
 
-    id = db.Column(
-        db.Integer,
-        primary_key=True,
-    )
+    id = db.Column(db.Integer, primary_key=True)
 
     name = db.Column(
         db.String(80),
@@ -114,10 +105,7 @@ class Technician(db.Model):
 class Item(db.Model):
     __tablename__ = "item"
 
-    id = db.Column(
-        db.Integer,
-        primary_key=True,
-    )
+    id = db.Column(db.Integer, primary_key=True)
 
     name = db.Column(
         db.String(100),
@@ -144,10 +132,7 @@ class Item(db.Model):
 class Movement(db.Model):
     __tablename__ = "movement"
 
-    id = db.Column(
-        db.Integer,
-        primary_key=True,
-    )
+    id = db.Column(db.Integer, primary_key=True)
 
     day = db.Column(
         db.Date,
@@ -203,6 +188,41 @@ class Movement(db.Model):
 
     technician = db.relationship(Technician)
     item = db.relationship(Item)
+
+
+class SharedReport(db.Model):
+    __tablename__ = "shared_report"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    token = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+    )
+
+    title = db.Column(
+        db.String(160),
+        nullable=False,
+    )
+
+    # Cópia dos dados no momento da geração.
+    snapshot = db.Column(
+        db.JSON,
+        nullable=False,
+    )
+
+    active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
 
 
 # TÉCNICOS E PREÇOS INICIAIS
@@ -272,8 +292,6 @@ app.jinja_env.filters["money"] = money
 
 
 def init_db():
-    # Cria a área exclusiva do relatório.
-    # Não altera o schema das outras aplicações.
     if REPORT_SCHEMA:
         with db.engine.begin() as connection:
             connection.execute(
@@ -282,7 +300,8 @@ def init_db():
                 )
             )
 
-    # Cria apenas as tabelas declaradas neste aplicativo.
+    # Também cria a nova tabela shared_report,
+    # preservando as tabelas e os registros existentes.
     db.create_all()
 
     for name in TECHNICIANS:
@@ -377,9 +396,7 @@ def protected(function):
                     error="Sessão encerrada. Entre novamente."
                 ), 401
 
-            return redirect(
-                url_for("login")
-            )
+            return redirect(url_for("login"))
 
         return function(*args, **kwargs)
 
@@ -414,6 +431,12 @@ def headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+
+    if request.path.startswith("/r/"):
+        response.headers["X-Robots-Tag"] = (
+            "noindex, nofollow, noarchive"
+        )
 
     return response
 
@@ -440,9 +463,7 @@ def login():
             session["user"] = user.id
             session["csrf"] = secrets.token_hex(32)
 
-            return redirect(
-                url_for("index")
-            )
+            return redirect(url_for("index"))
 
         error = "Usuário ou senha incorretos."
 
@@ -456,9 +477,7 @@ def login():
 def logout():
     session.clear()
 
-    return redirect(
-        url_for("login")
-    )
+    return redirect(url_for("login"))
 
 
 # PÁGINA PRINCIPAL
@@ -564,14 +583,19 @@ def movement_dict(movement):
     }
 
 
-def summary(start, end):
+def summary(
+    start,
+    end,
+    previous_start=None,
+    previous_end=None,
+):
     rows = records(start, end)
 
-    previous_end = start - timedelta(days=1)
+    if previous_end is None:
+        previous_end = start - timedelta(days=1)
 
-    previous_start = (
-        previous_end - (end - start)
-    )
+    if previous_start is None:
+        previous_start = previous_end - (end - start)
 
     previous = records(
         previous_start,
@@ -998,16 +1022,21 @@ def csv_report():
     )
 
 
-# EXPORTAÇÃO PDF COM GRÁFICO
+# PDF A PARTIR DOS DADOS INFORMADOS
+# O relatório compartilhado usa a cópia salva,
+# sem consultar novamente as movimentações.
 
-@app.get("/report.pdf")
-@protected
-def pdf_report():
+def build_pdf(data, issued_at=None):
     from reportlab.pdfgen import canvas
     from reportlab.lib.colors import HexColor
 
-    start, end = interval()
-    data = summary(start, end)
+    start = date.fromisoformat(data["start"])
+    end = date.fromisoformat(data["end"])
+
+    issued_at = (
+        issued_at
+        or today().strftime("%d/%m/%Y")
+    )
 
     output = io.BytesIO()
 
@@ -1060,7 +1089,7 @@ def pdf_report():
             540,
             (
                 f"{start:%d/%m/%Y} a {end:%d/%m/%Y}"
-                f" | Emissão: {today():%d/%m/%Y}"
+                f" | Emissão: {issued_at}"
             ),
         )
 
@@ -1094,6 +1123,9 @@ def pdf_report():
 
     page()
 
+    if data.get("title"):
+        line(data["title"], True)
+
     line(
         (
             f"Retiradas: {money(data['withdrawals'])}"
@@ -1117,6 +1149,9 @@ def pdf_report():
             f" | {money(data['previous'])}"
         )
     )
+
+    if data.get("comparison_note"):
+        line(data["comparison_note"])
 
     if data["has_previous"]:
         line(
@@ -1148,15 +1183,19 @@ def pdf_report():
         True,
     )
 
-    for movement in records(start, end):
+    for movement in reversed(data["movements"]):
+        day = date.fromisoformat(
+            movement["date"]
+        )
+
         line(
-            f"{movement.day:%d/%m}"
-            f" | {movement.technician.name}"
-            f" | {movement.item.name}"
-            f" | {movement.kind}"
-            f" | {movement.quantity.normalize()}"
-            f" {movement.item.unit}"
-            f" | {money(signed(movement))}"
+            f"{day:%d/%m}"
+            f" | {movement['technician']}"
+            f" | {movement['item']}"
+            f" | {movement['kind']}"
+            f" | {movement['quantity']:g}"
+            f" {movement['unit']}"
+            f" | {money(movement['total'])}"
         )
 
     pdf.showPage()
@@ -1231,6 +1270,338 @@ def pdf_report():
         download_name=(
             f"relatorio_matriz_{start}_{end}.pdf"
         ),
+    )
+
+
+@app.get("/report.pdf")
+@protected
+def pdf_report():
+    return build_pdf(
+        summary(*interval())
+    )
+
+
+# PERÍODOS DOS RELATÓRIOS COMPARTILHADOS
+
+def shared_period(payload):
+    current = today()
+    mode = payload.get("mode", "week")
+
+    previous_start = None
+    previous_end = None
+    partial = False
+
+    if mode == "week":
+        # A data escolhida identifica a semana.
+        anchor = date.fromisoformat(
+            payload.get("anchor")
+            or current.isoformat()
+        )
+
+        start = anchor - timedelta(
+            days=anchor.weekday()
+        )
+
+        friday = start + timedelta(days=4)
+
+        if start > current:
+            raise ValueError(
+                "Selecione uma semana que já começou."
+            )
+
+        # Antes de sexta, gera um fechamento parcial.
+        end = min(friday, current)
+        partial = end < friday
+
+        # Compara os mesmos dias da semana anterior.
+        previous_start = start - timedelta(days=7)
+        previous_end = end - timedelta(days=7)
+
+        title = (
+            "Relatório semanal — segunda a sexta"
+        )
+
+        if partial:
+            title += " (parcial)"
+
+    elif mode == "last30":
+        # Hoje e os 29 dias anteriores.
+        end = current
+        start = end - timedelta(days=29)
+
+        title = (
+            "Relatório dos últimos 30 dias"
+        )
+
+    elif mode == "month":
+        # Por padrão, usa o último mês encerrado.
+        default = (
+            current.replace(day=1)
+            - timedelta(days=1)
+        )
+
+        month = (
+            payload.get("month")
+            or default.strftime("%Y-%m")
+        )
+
+        start = date.fromisoformat(
+            month + "-01"
+        )
+
+        if start >= current.replace(day=1):
+            raise ValueError(
+                "Selecione um mês anterior ao atual."
+            )
+
+        next_month = (
+            start.replace(day=28)
+            + timedelta(days=4)
+        ).replace(day=1)
+
+        end = next_month - timedelta(days=1)
+
+        previous_end = (
+            start - timedelta(days=1)
+        )
+
+        previous_start = (
+            previous_end.replace(day=1)
+        )
+
+        title = (
+            "Relatório mensal — "
+            + start.strftime("%m/%Y")
+        )
+
+    else:
+        raise ValueError(
+            "Escolha week, last30 ou month."
+        )
+
+    return (
+        title,
+        start,
+        end,
+        previous_start,
+        previous_end,
+        partial,
+    )
+
+
+# LINKS DOS RELATÓRIOS
+
+def report_url(report):
+    path = url_for(
+        "shared_report",
+        token=report.token,
+    )
+
+    base = (
+        os.environ.get("RENDER_EXTERNAL_URL")
+        or request.url_root
+    )
+
+    return base.rstrip("/") + path
+
+
+def report_info(report):
+    return {
+        "id": report.id,
+        "title": report.title,
+        "active": report.active,
+        "created_at": report.snapshot["generated_at"],
+        "start": report.snapshot["start"],
+        "end": report.snapshot["end"],
+        "total": report.snapshot["total"],
+        "url": (
+            report_url(report)
+            if report.active
+            else None
+        ),
+    }
+
+
+# GERAR UM NOVO RELATÓRIO
+# Exige login e proteção CSRF.
+
+@app.post("/api/reports")
+@protected
+def create_shared_report():
+    payload = request.get_json(silent=True)
+
+    if not isinstance(payload, dict):
+        return jsonify(
+            error="Dados inválidos."
+        ), 400
+
+    try:
+        (
+            title,
+            start,
+            end,
+            previous_start,
+            previous_end,
+            partial,
+        ) = shared_period(payload)
+
+        snapshot = summary(
+            start,
+            end,
+            previous_start,
+            previous_end,
+        )
+
+        generated = datetime.now(
+            ZoneInfo("America/Sao_Paulo")
+        )
+
+        snapshot["generated_at"] = (
+            generated.isoformat(timespec="seconds")
+        )
+
+        snapshot["issued_at"] = (
+            generated.strftime("%d/%m/%Y %H:%M")
+        )
+
+        snapshot["partial"] = partial
+
+        snapshot["mode"] = payload.get(
+            "mode",
+            "week",
+        )
+
+        snapshot["title"] = title
+
+        if snapshot["mode"] == "week":
+            snapshot["comparison_note"] = (
+                "Mesmos dias úteis da semana anterior."
+            )
+
+        elif snapshot["mode"] == "month":
+            snapshot["comparison_note"] = (
+                "Mês calendário anterior; "
+                "a quantidade de dias pode variar."
+            )
+
+        else:
+            snapshot["comparison_note"] = (
+                "30 dias imediatamente anteriores."
+            )
+
+        report = SharedReport(
+            token=secrets.token_urlsafe(32),
+            title=title,
+            snapshot=snapshot,
+        )
+
+        db.session.add(report)
+        db.session.commit()
+
+        return jsonify(
+            ok=True,
+            **report_info(report),
+        ), 201
+
+    except (
+        ValueError,
+        TypeError,
+        OverflowError,
+    ):
+        db.session.rollback()
+
+        return jsonify(
+            error=(
+                "Período inválido. Escolha uma "
+                "semana já iniciada ou um mês fechado."
+            )
+        ), 400
+
+
+# LISTAR RELATÓRIOS GERADOS
+# Disponível apenas para quem está logado.
+
+@app.get("/api/reports")
+@protected
+def list_shared_reports():
+    reports = db.session.scalars(
+        select(SharedReport).order_by(
+            SharedReport.id.desc()
+        )
+    ).all()
+
+    return jsonify([
+        report_info(report)
+        for report in reports
+    ])
+
+
+# DESATIVAR UM LINK
+# Bloqueia a página compartilhada e seu PDF.
+
+@app.post("/api/reports/<int:report_id>/revoke")
+@protected
+def revoke_shared_report(report_id):
+    report = db.session.get(
+        SharedReport,
+        report_id,
+    )
+
+    if not report:
+        return jsonify(
+            error="Relatório não encontrado."
+        ), 404
+
+    report.active = False
+
+    db.session.commit()
+
+    return jsonify(ok=True)
+
+
+def active_report(token):
+    report = db.session.scalar(
+        select(SharedReport).where(
+            SharedReport.token == token,
+            SharedReport.active.is_(True),
+        )
+    )
+
+    if not report:
+        abort(
+            404,
+            "Este relatório não existe "
+            "ou o link foi desativado.",
+        )
+
+    return report
+
+
+# PÁGINA COMPARTILHADA
+# Quem possui o link pode visualizar o relatório.
+# Não permite alterar dados nem acessar a dashboard.
+
+@app.get("/r/<token>")
+def shared_report(token):
+    report = active_report(token)
+
+    return render_template(
+        "relatorio_compartilhado.html",
+        report=report,
+        data=report.snapshot,
+    )
+
+
+# PDF DO RELATÓRIO COMPARTILHADO
+# Usa os mesmos dados preservados no fechamento.
+
+@app.get("/r/<token>/pdf")
+def shared_report_pdf(token):
+    report = active_report(token)
+
+    return build_pdf(
+        report.snapshot,
+        issued_at=report.snapshot["issued_at"],
     )
 
 
