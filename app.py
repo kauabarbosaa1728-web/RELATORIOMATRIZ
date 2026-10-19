@@ -2,6 +2,8 @@ import os
 import secrets
 import io
 import csv
+import json
+import hashlib
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
@@ -22,20 +24,30 @@ from flask import (
 
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import select, func, MetaData, text
+from sqlalchemy.exc import IntegrityError
+
 from werkzeug.security import (
     generate_password_hash,
     check_password_hash,
 )
 
+from leitor_retiradas import organizar_retiradas
 
+
+# ==========================================================
 # CONFIGURAÇÃO
+# ==========================================================
 
 app = Flask(__name__)
 
 database_url = os.environ.get(
     "DATABASE_URL",
     "sqlite:///matriz.db",
-).replace("postgres://", "postgresql://", 1)
+).replace(
+    "postgres://",
+    "postgresql://",
+    1,
+)
 
 if database_url.startswith("postgresql://"):
     database_url = database_url.replace(
@@ -71,12 +83,17 @@ db = SQLAlchemy(
 )
 
 
+# ==========================================================
 # BANCO DE DADOS
+# ==========================================================
 
 class User(db.Model):
     __tablename__ = "user"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     username = db.Column(
         db.String(80),
@@ -93,7 +110,10 @@ class User(db.Model):
 class Technician(db.Model):
     __tablename__ = "technician"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     name = db.Column(
         db.String(80),
@@ -105,7 +125,10 @@ class Technician(db.Model):
 class Item(db.Model):
     __tablename__ = "item"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     name = db.Column(
         db.String(100),
@@ -132,7 +155,10 @@ class Item(db.Model):
 class Movement(db.Model):
     __tablename__ = "movement"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     day = db.Column(
         db.Date,
@@ -168,7 +194,6 @@ class Movement(db.Model):
         nullable=False,
     )
 
-    # Identifica a retirada original nas devoluções.
     original_id = db.Column(
         db.Integer,
         db.ForeignKey("movement.id"),
@@ -193,7 +218,10 @@ class Movement(db.Model):
 class SharedReport(db.Model):
     __tablename__ = "shared_report"
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
 
     token = db.Column(
         db.String(64),
@@ -225,7 +253,58 @@ class SharedReport(db.Model):
     )
 
 
-# TÉCNICOS E PREÇOS INICIAIS
+class TextImport(db.Model):
+    """
+    Guarda as prévias das retiradas por texto.
+
+    O relatório associado identifica que a importação
+    já foi confirmada, evitando repetir a gravação.
+    """
+
+    __tablename__ = "text_import"
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True,
+    )
+
+    token = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+    )
+
+    fingerprint = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+    )
+
+    payload = db.Column(
+        db.JSON,
+        nullable=False,
+    )
+
+    expires_at = db.Column(
+        db.DateTime,
+        nullable=False,
+    )
+
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey("shared_report.id"),
+    )
+
+
+# ==========================================================
+# CADASTROS INICIAIS
+# ==========================================================
 
 TECHNICIANS = [
     "Rogério",
@@ -241,14 +320,22 @@ TECHNICIANS = [
 
 MATERIALS = [
     ("APC", "un", "6.10"),
-    ("Abraçadeira", "un", str(Decimal("20.80") / 100)),
+    (
+        "Abraçadeira",
+        "un",
+        str(Decimal("20.80") / 100),
+    ),
     ("UPC", "un", "6.10"),
     ("Cunha", "un", "2.94"),
     ("Bucha de acabamento", "un", "1.50"),
     ("Fita isolante", "rolo", "5.57"),
     ("Pino Jack RJ45", "un", "0.24"),
     ("Miguelão", "un", "0.31"),
-    ("Cabo de rede", "m", str(Decimal("175.30") / 305)),
+    (
+        "Cabo de rede",
+        "m",
+        str(Decimal("175.30") / 305),
+    ),
     ("Cabo Miniflatdrop", "m", "0.3909"),
 ]
 
@@ -269,7 +356,9 @@ EQUIPMENT = [
 ]
 
 
+# ==========================================================
 # FUNÇÕES AUXILIARES
+# ==========================================================
 
 def today():
     return datetime.now(
@@ -300,8 +389,8 @@ def init_db():
                 )
             )
 
-    # Também cria a nova tabela shared_report,
-    # preservando as tabelas e os registros existentes.
+    # Cria também a tabela text_import.
+    # Não apaga os registros existentes.
     db.create_all()
 
     for name in TECHNICIANS:
@@ -403,7 +492,9 @@ def protected(function):
     return wrapper
 
 
-# PROTEÇÕES DAS REQUISIÇÕES
+# ==========================================================
+# PROTEÇÕES
+# ==========================================================
 
 @app.before_request
 def csrf_guard():
@@ -441,7 +532,9 @@ def headers(response):
     return response
 
 
+# ==========================================================
 # LOGIN
+# ==========================================================
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -460,6 +553,7 @@ def login():
             request.form.get("password", ""),
         ):
             session.clear()
+
             session["user"] = user.id
             session["csrf"] = secrets.token_hex(32)
 
@@ -480,7 +574,9 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ==========================================================
 # PÁGINA PRINCIPAL
+# ==========================================================
 
 @app.get("/")
 @protected
@@ -506,7 +602,9 @@ def index():
     )
 
 
+# ==========================================================
 # PERÍODOS E CÁLCULOS
+# ==========================================================
 
 def interval():
     try:
@@ -690,34 +788,45 @@ def summary(
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
+
         "previous_start": previous_start.isoformat(),
         "previous_end": previous_end.isoformat(),
+
         "total": float(total),
         "previous": float(prior),
         "difference": float(prior - total),
+
         "percent": (
             float((prior - total) / prior * 100)
             if prior > 0
             else None
         ),
+
         "has_previous": bool(previous),
+
         "withdrawals": float(withdrawals_total),
         "returns": float(returns_total),
+
         "materials": float(materials_total),
         "equipment": float(equipment_total),
+
         "count": len(rows),
+
         "technicians": {
             name: float(value)
             for name, value in technicians.items()
         },
+
         "daily": {
             day: float(value)
             for day, value in sorted(daily.items())
         },
+
         "items": {
             name: float(value)
             for name, value in top_items
         },
+
         "movements": [
             movement_dict(m)
             for m in reversed(rows)
@@ -725,7 +834,9 @@ def summary(
     }
 
 
+# ==========================================================
 # DADOS DA DASHBOARD
+# ==========================================================
 
 @app.get("/api/dashboard")
 @protected
@@ -735,7 +846,9 @@ def dashboard():
     )
 
 
+# ==========================================================
 # RETIRADAS COM SALDO PARA DEVOLUÇÃO
+# ==========================================================
 
 @app.get("/api/withdrawals")
 @protected
@@ -764,9 +877,7 @@ def withdrawals():
             )
         )
 
-        remaining = (
-            movement.quantity - returned
-        )
+        remaining = movement.quantity - returned
 
         if remaining > 0:
             result.append({
@@ -781,7 +892,9 @@ def withdrawals():
     return jsonify(result)
 
 
-# REGISTRAR RETIRADA OU DEVOLUÇÃO
+# ==========================================================
+# MOVIMENTAÇÃO MANUAL
+# ==========================================================
 
 @app.post("/api/movements")
 @protected
@@ -835,9 +948,7 @@ def create_movement():
                 select(Movement)
                 .where(
                     Movement.id
-                    == int(
-                        data.get("original_id", 0)
-                    )
+                    == int(data.get("original_id", 0))
                 )
                 .with_for_update()
             )
@@ -867,9 +978,7 @@ def create_movement():
                 )
             )
 
-            remaining = (
-                original.quantity - returned
-            )
+            remaining = original.quantity - returned
 
             if quantity > remaining:
                 raise ValueError(
@@ -884,16 +993,12 @@ def create_movement():
         else:
             technician = db.session.get(
                 Technician,
-                int(
-                    data.get("technician_id", 0)
-                ),
+                int(data.get("technician_id", 0)),
             )
 
             item = db.session.get(
                 Item,
-                int(
-                    data.get("item_id", 0)
-                ),
+                int(data.get("item_id", 0)),
             )
 
             if not technician or not item:
@@ -905,8 +1010,7 @@ def create_movement():
 
         if (
             item.unit != "m"
-            and quantity
-            != quantity.to_integral_value()
+            and quantity != quantity.to_integral_value()
         ):
             raise ValueError(
                 "Este item deve ser lançado "
@@ -929,11 +1033,13 @@ def create_movement():
             quantity=quantity,
             cost=cost,
             kind=kind,
+
             original_id=(
                 original.id
                 if original
                 else None
             ),
+
             note=note,
         )
 
@@ -957,7 +1063,9 @@ def create_movement():
         ), 400
 
 
+# ==========================================================
 # EXPORTAÇÃO CSV
+# ==========================================================
 
 @app.get("/report.csv")
 @protected
@@ -998,13 +1106,17 @@ def csv_report():
             safe(movement.item.name),
             movement.item.category,
             movement.kind,
+
             str(
                 movement.quantity
             ).replace(".", ","),
+
             movement.item.unit,
+
             str(
                 signed(movement)
             ).replace(".", ","),
+
             safe(movement.note),
         ])
 
@@ -1016,15 +1128,13 @@ def csv_report():
         io.BytesIO(content),
         mimetype="text/csv",
         as_attachment=True,
-        download_name=(
-            f"matriz_{start}_{end}.csv"
-        ),
+        download_name=f"matriz_{start}_{end}.csv",
     )
 
 
-# PDF A PARTIR DOS DADOS INFORMADOS
-# O relatório compartilhado usa a cópia salva,
-# sem consultar novamente as movimentações.
+# ==========================================================
+# PDF
+# ==========================================================
 
 def build_pdf(data, issued_at=None):
     from reportlab.pdfgen import canvas
@@ -1055,7 +1165,10 @@ def build_pdf(data, issued_at=None):
         )
 
         pdf.rect(
-            0, 525, 842, 70,
+            0,
+            525,
+            842,
+            70,
             fill=1,
             stroke=0,
         )
@@ -1107,9 +1220,7 @@ def build_pdf(data, issued_at=None):
             page()
 
         pdf.setFont(
-            "Helvetica-Bold"
-            if bold
-            else "Helvetica",
+            "Helvetica-Bold" if bold else "Helvetica",
             10,
         )
 
@@ -1124,7 +1235,10 @@ def build_pdf(data, issued_at=None):
     page()
 
     if data.get("title"):
-        line(data["title"], True)
+        line(
+            data["title"],
+            True,
+        )
 
     line(
         (
@@ -1158,6 +1272,7 @@ def build_pdf(data, issued_at=None):
             "Variação favorável: "
             + money(data["difference"])
         )
+
     else:
         line(
             "Sem base anterior para comparação."
@@ -1281,18 +1396,23 @@ def pdf_report():
     )
 
 
+# ==========================================================
 # PERÍODOS DOS RELATÓRIOS COMPARTILHADOS
+# ==========================================================
 
 def shared_period(payload):
     current = today()
-    mode = payload.get("mode", "week")
+
+    mode = payload.get(
+        "mode",
+        "week",
+    )
 
     previous_start = None
     previous_end = None
     partial = False
 
     if mode == "week":
-        # A data escolhida identifica a semana.
         anchor = date.fromisoformat(
             payload.get("anchor")
             or current.isoformat()
@@ -1309,11 +1429,9 @@ def shared_period(payload):
                 "Selecione uma semana que já começou."
             )
 
-        # Antes de sexta, gera um fechamento parcial.
         end = min(friday, current)
         partial = end < friday
 
-        # Compara os mesmos dias da semana anterior.
         previous_start = start - timedelta(days=7)
         previous_end = end - timedelta(days=7)
 
@@ -1325,7 +1443,6 @@ def shared_period(payload):
             title += " (parcial)"
 
     elif mode == "last30":
-        # Hoje e os 29 dias anteriores.
         end = current
         start = end - timedelta(days=29)
 
@@ -1334,7 +1451,6 @@ def shared_period(payload):
         )
 
     elif mode == "month":
-        # Por padrão, usa o último mês encerrado.
         default = (
             current.replace(day=1)
             - timedelta(days=1)
@@ -1389,7 +1505,9 @@ def shared_period(payload):
     )
 
 
+# ==========================================================
 # LINKS DOS RELATÓRIOS
+# ==========================================================
 
 def report_url(report):
     path = url_for(
@@ -1410,10 +1528,13 @@ def report_info(report):
         "id": report.id,
         "title": report.title,
         "active": report.active,
+
         "created_at": report.snapshot["generated_at"],
+
         "start": report.snapshot["start"],
         "end": report.snapshot["end"],
         "total": report.snapshot["total"],
+
         "url": (
             report_url(report)
             if report.active
@@ -1421,9 +1542,6 @@ def report_info(report):
         ),
     }
 
-
-# GERAR UM NOVO RELATÓRIO
-# Exige login e proteção CSRF.
 
 @app.post("/api/reports")
 @protected
@@ -1518,9 +1636,6 @@ def create_shared_report():
         ), 400
 
 
-# LISTAR RELATÓRIOS GERADOS
-# Disponível apenas para quem está logado.
-
 @app.get("/api/reports")
 @protected
 def list_shared_reports():
@@ -1535,9 +1650,6 @@ def list_shared_reports():
         for report in reports
     ])
 
-
-# DESATIVAR UM LINK
-# Bloqueia a página compartilhada e seu PDF.
 
 @app.post("/api/reports/<int:report_id>/revoke")
 @protected
@@ -1577,10 +1689,6 @@ def active_report(token):
     return report
 
 
-# PÁGINA COMPARTILHADA
-# Quem possui o link pode visualizar o relatório.
-# Não permite alterar dados nem acessar a dashboard.
-
 @app.get("/r/<token>")
 def shared_report(token):
     report = active_report(token)
@@ -1592,9 +1700,6 @@ def shared_report(token):
     )
 
 
-# PDF DO RELATÓRIO COMPARTILHADO
-# Usa os mesmos dados preservados no fechamento.
-
 @app.get("/r/<token>/pdf")
 def shared_report_pdf(token):
     report = active_report(token)
@@ -1605,7 +1710,567 @@ def shared_report_pdf(token):
     )
 
 
+# ==========================================================
+# IMPORTAÇÃO POR TEXTO — PRÉVIA
+# ==========================================================
+
+@app.post("/api/text-import/preview")
+@protected
+def text_import_preview():
+    payload = request.get_json(silent=True)
+
+    if not isinstance(payload, dict):
+        return jsonify(
+            error="Dados inválidos."
+        ), 400
+
+    try:
+        if not isinstance(
+            payload.get("text"),
+            str,
+        ):
+            raise ValueError(
+                "Escreva as retiradas no campo de texto."
+            )
+
+        start = date.fromisoformat(
+            payload.get("start", "")
+        )
+
+        end = date.fromisoformat(
+            payload.get("end", "")
+        )
+
+        if (
+            end < start
+            or (end - start).days > 366
+            or end > today()
+        ):
+            raise ValueError(
+                "Escolha um período de até 367 dias, "
+                "sem datas futuras."
+            )
+
+        technicians = [
+            {
+                "id": technician.id,
+                "name": technician.name,
+            }
+
+            for technician in db.session.scalars(
+                select(Technician)
+            )
+        ]
+
+        items = [
+            {
+                "id": item.id,
+                "name": item.name,
+                "unit": item.unit,
+                "category": item.category,
+                "cost": str(item.cost),
+            }
+
+            for item in db.session.scalars(
+                select(Item)
+            )
+        ]
+
+        result = organizar_retiradas(
+            payload["text"],
+            technicians,
+            items,
+            start.isoformat(),
+            end.isoformat(),
+
+            data_padrao=(
+                payload.get("default_date")
+                or None
+            ),
+
+            hoje=today(),
+        )
+
+        total = Decimal(0)
+        totals = {}
+
+        for row in result["rows"]:
+            value = (
+                Decimal(row["quantity"])
+                * Decimal(row["cost"])
+            ).quantize(
+                Decimal(".01"),
+                rounding=ROUND_HALF_UP,
+            )
+
+            row["total"] = str(value)
+
+            total += value
+
+            name = row["technician"]
+
+            totals[name] = (
+                totals.get(name, Decimal(0))
+                + value
+            )
+
+        result["total"] = str(total)
+
+        result["technicians"] = {
+            name: str(value)
+            for name, value in totals.items()
+        }
+
+        result["start"] = start.isoformat()
+        result["end"] = end.isoformat()
+
+        result["token"] = None
+        result["existing_report"] = None
+        result["warnings"] = []
+
+        # Itens reconhecidos podem aparecer na prévia,
+        # mas nenhuma confirmação é liberada com pendências.
+        if not result["can_confirm"]:
+            return jsonify(result)
+
+        # Identificação do conjunto de retiradas.
+        # Detecta também o mesmo conteúdo em outra ordem.
+        grouped = {}
+
+        for row in result["rows"]:
+            key = (
+                row["date"],
+                row["technician_id"],
+                row["item_id"],
+            )
+
+            grouped[key] = (
+                grouped.get(key, Decimal(0))
+                + Decimal(row["quantity"])
+            )
+
+        canonical = [
+            (
+                list(key),
+                format(
+                    quantity.normalize(),
+                    "f",
+                ),
+            )
+
+            for key, quantity in sorted(
+                grouped.items()
+            )
+        ]
+
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                canonical,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+
+        draft = db.session.scalar(
+            select(TextImport)
+            .where(
+                TextImport.fingerprint == fingerprint
+            )
+            .with_for_update()
+        )
+
+        # Importação já confirmada:
+        # devolve o relatório anterior e não lança novamente.
+        if draft and draft.report_id:
+            result["can_confirm"] = False
+
+            result["warnings"].append(
+                "Estas retiradas já foram importadas. "
+                "Nenhuma foi lançada novamente."
+            )
+
+            report = db.session.get(
+                SharedReport,
+                draft.report_id,
+            )
+
+            if report:
+                result["existing_report"] = (
+                    report_info(report)
+                )
+
+            return jsonify(result)
+
+        if (
+            draft
+            and draft.user_id != session["user"]
+        ):
+            result["can_confirm"] = False
+
+            result["issues"].append({
+                "message": (
+                    "Estas retiradas já possuem uma prévia "
+                    "em outra conta. Confira o histórico."
+                ),
+                "excerpt": "",
+            })
+
+            return jsonify(result)
+
+        if not draft:
+            draft = TextImport(
+                token=secrets.token_urlsafe(32),
+                fingerprint=fingerprint,
+                user_id=session["user"],
+            )
+
+            db.session.add(draft)
+
+        # Cada nova prévia invalida o token anterior.
+        draft.token = secrets.token_urlsafe(32)
+
+        # Dados de confirmação ficam no servidor.
+        # O navegador não escolhe os preços ao confirmar.
+        draft.payload = {
+            "rows": result["rows"],
+            "start": result["start"],
+            "end": result["end"],
+        }
+
+        draft.expires_at = (
+            datetime.utcnow()
+            + timedelta(minutes=30)
+        )
+
+        # Verifica possíveis coincidências com o histórico.
+        duplicate = False
+
+        for row in result["rows"]:
+            existing = db.session.scalar(
+                select(Movement.id)
+                .where(
+                    Movement.day == date.fromisoformat(
+                        row["date"]
+                    ),
+
+                    Movement.technician_id
+                    == row["technician_id"],
+
+                    Movement.item_id
+                    == row["item_id"],
+
+                    Movement.quantity
+                    == Decimal(row["quantity"]),
+
+                    Movement.kind == "retirada",
+                )
+                .limit(1)
+            )
+
+            if existing is not None:
+                duplicate = True
+                break
+
+        draft.payload = {
+            **draft.payload,
+            "possible_duplicates": duplicate,
+        }
+
+        result["requires_duplicate_ack"] = duplicate
+
+        if duplicate:
+            result["warnings"].append(
+                "Há retiradas iguais no histórico. "
+                "Confira se são novas antes de confirmar."
+            )
+
+        db.session.commit()
+
+        result["token"] = draft.token
+        result["expires_in_minutes"] = 30
+
+        return jsonify(result)
+
+    except IntegrityError:
+        db.session.rollback()
+
+        return jsonify(
+            error=(
+                "Esta prévia foi criada em outra requisição. "
+                "Clique em Organizar novamente."
+            )
+        ), 409
+
+    except (
+        ValueError,
+        TypeError,
+        InvalidOperation,
+        OverflowError,
+    ) as error:
+        db.session.rollback()
+
+        return jsonify(
+            error=(
+                str(error)
+                or "Confira o texto e as datas."
+            )
+        ), 400
+
+
+# ==========================================================
+# IMPORTAÇÃO POR TEXTO — CONFIRMAR E GERAR LINK
+# ==========================================================
+
+@app.post("/api/text-import/confirm")
+@protected
+def text_import_confirm():
+    payload = request.get_json(silent=True)
+
+    if (
+        not isinstance(payload, dict)
+        or payload.get("confirm") is not True
+    ):
+        return jsonify(
+            error=(
+                "Confira a prévia e confirme "
+                "antes de salvar."
+            )
+        ), 400
+
+    token = payload.get("token")
+
+    if (
+        not isinstance(token, str)
+        or not token
+        or len(token) > 64
+    ):
+        return jsonify(
+            error=(
+                "Prévia inválida. "
+                "Organize o texto novamente."
+            )
+        ), 400
+
+    try:
+        # No PostgreSQL, bloqueia a prévia durante a gravação
+        # para evitar duas confirmações simultâneas.
+        draft = db.session.scalar(
+            select(TextImport)
+            .where(
+                TextImport.token == token,
+                TextImport.user_id == session["user"],
+            )
+            .with_for_update()
+        )
+
+        if not draft:
+            return jsonify(
+                error=(
+                    "Prévia não encontrada nesta conta."
+                )
+            ), 404
+
+        # Repetir a confirmação retorna o mesmo relatório.
+        if draft.report_id:
+            report = db.session.get(
+                SharedReport,
+                draft.report_id,
+            )
+
+            return jsonify(
+                ok=True,
+                reused=True,
+                **report_info(report),
+            )
+
+        if draft.expires_at < datetime.utcnow():
+            return jsonify(
+                error=(
+                    "A prévia expirou. "
+                    "Organize o texto novamente."
+                )
+            ), 409
+
+        if (
+            draft.payload.get("possible_duplicates")
+            and payload.get("ack_duplicates") is not True
+        ):
+            return jsonify(
+                error=(
+                    "Confira as possíveis duplicidades "
+                    "e marque a confirmação."
+                )
+            ), 409
+
+        rows = draft.payload["rows"]
+
+        if not rows or len(rows) > 500:
+            raise ValueError(
+                "Prévia inválida. "
+                "Organize o texto novamente."
+            )
+
+        for row in rows:
+            item = db.session.get(
+                Item,
+                row["item_id"],
+            )
+
+            technician = db.session.get(
+                Technician,
+                row["technician_id"],
+            )
+
+            if not item or not technician:
+                raise ValueError(
+                    "O catálogo mudou. "
+                    "Organize o texto novamente."
+                )
+
+            if (
+                Decimal(str(item.cost))
+                != Decimal(row["cost"])
+                or item.unit != row["unit"]
+            ):
+                raise ValueError(
+                    "Um custo ou unidade mudou. "
+                    "Organize o texto novamente "
+                    "para conferir os valores."
+                )
+
+            day = date.fromisoformat(
+                row["date"]
+            )
+
+            quantity = Decimal(
+                row["quantity"]
+            )
+
+            if (
+                day > today()
+                or not quantity.is_finite()
+                or quantity <= 0
+                or quantity > 1000000
+            ):
+                raise ValueError(
+                    "Data ou quantidade inválida na prévia."
+                )
+
+            if (
+                item.unit != "m"
+                and quantity
+                != quantity.to_integral_value()
+            ):
+                raise ValueError(
+                    "Este item exige unidades inteiras."
+                )
+
+            db.session.add(
+                Movement(
+                    day=day,
+                    technician=technician,
+                    item=item,
+                    quantity=quantity,
+                    cost=item.cost,
+                    kind="retirada",
+
+                    note=(
+                        "Retirada importada por texto e "
+                        "conferida antes da confirmação."
+                    ),
+                )
+            )
+
+        # Disponibiliza as novas retiradas para o cálculo,
+        # ainda sem confirmar a transação.
+        db.session.flush()
+
+        start = date.fromisoformat(
+            draft.payload["start"]
+        )
+
+        end = date.fromisoformat(
+            draft.payload["end"]
+        )
+
+        # O fechamento reúne todas as movimentações do período,
+        # incluindo as que já existiam e as recém-importadas.
+        snapshot = summary(
+            start,
+            end,
+        )
+
+        generated = datetime.now(
+            ZoneInfo("America/Sao_Paulo")
+        )
+
+        title = (
+            f"Relatório de retiradas — "
+            f"{start:%d/%m/%Y} a {end:%d/%m/%Y}"
+        )
+
+        snapshot.update(
+            title=title,
+            mode="text",
+            partial=False,
+
+            generated_at=generated.isoformat(
+                timespec="seconds"
+            ),
+
+            issued_at=generated.strftime(
+                "%d/%m/%Y %H:%M"
+            ),
+
+            comparison_note=(
+                "Período imediatamente anterior "
+                "de igual duração."
+            ),
+
+            imported_count=len(rows),
+        )
+
+        report = SharedReport(
+            token=secrets.token_urlsafe(32),
+            title=title,
+            snapshot=snapshot,
+        )
+
+        db.session.add(report)
+        db.session.flush()
+
+        draft.report_id = report.id
+
+        # Movimentações e relatório são gravados juntos.
+        # Se houver erro antes do commit, tudo é revertido.
+        db.session.commit()
+
+        return jsonify(
+            ok=True,
+            reused=False,
+            imported_count=len(rows),
+            **report_info(report),
+        ), 201
+
+    except (
+        ValueError,
+        TypeError,
+        InvalidOperation,
+        OverflowError,
+    ) as error:
+        db.session.rollback()
+
+        return jsonify(
+            error=(
+                str(error)
+                or "Não foi possível confirmar a prévia."
+            )
+        ), 400
+
+
+# ==========================================================
 # VERIFICAÇÃO DO SERVIÇO
+# ==========================================================
 
 @app.get("/health")
 def health():
