@@ -2,7 +2,7 @@
 
 /* ==========================================
    ALMOXARIFADO MATRIZ
-   Dashboard, movimentações e relatório por texto
+   Dashboard, movimentações e importação do SGP
    ========================================== */
 
 const $ = (selector) => document.querySelector(selector);
@@ -118,9 +118,7 @@ function validPeriod() {
         `${elements.end.value}T00:00:00Z`
     );
 
-    const days = (end - start) / 86400000;
-
-    if (days > 366) {
+    if ((end - start) / 86400000 > 366) {
         elements.message.textContent =
             "Selecione um período de até 367 dias.";
 
@@ -156,7 +154,10 @@ function selectPeriod(mode) {
     ).forEach((button) => {
         const selected = button.dataset.period === mode;
 
-        button.classList.toggle("selected", selected);
+        button.classList.toggle(
+            "selected",
+            selected
+        );
 
         button.setAttribute(
             "aria-pressed",
@@ -168,7 +169,7 @@ function selectPeriod(mode) {
 }
 
 
-/* CRIAÇÃO SEGURA DE ELEMENTOS */
+/* CRIAÇÃO SEGURA DOS ELEMENTOS */
 
 function createNode(tag, text, className) {
     const element = document.createElement(tag);
@@ -604,6 +605,7 @@ function renderComparison(data) {
     if (data.percent === null) {
         comparison.textContent =
             "Base anterior sem valor positivo";
+
     } else {
         const percent = Math.abs(
             data.percent
@@ -713,7 +715,7 @@ function renderMovements(movements) {
 }
 
 
-/* ATUALIZAÇÃO DA DASHBOARD */
+/* ATUALIZAR A DASHBOARD */
 
 async function refreshDashboard() {
     const requestNumber = ++state.requestNumber;
@@ -806,7 +808,7 @@ async function refreshDashboard() {
 }
 
 
-/* FORMULÁRIO DE MOVIMENTAÇÃO */
+/* FORMULÁRIO MANUAL */
 
 function updateSaveButton() {
     const isReturn = (
@@ -923,6 +925,7 @@ async function changeKind() {
     if (!isReturn) {
         updateUnitHint();
         updateSaveButton();
+
         return;
     }
 
@@ -1088,7 +1091,6 @@ elements.form.addEventListener(
         );
 
         state.saving = true;
-
         elements.error.textContent = "";
 
         updateSaveButton();
@@ -1238,7 +1240,7 @@ selectPeriod("month");
 
 
 /* ==========================================
-   ASSISTENTE DE RETIRADAS POR TEXTO
+   ASSISTENTE DE RETIRADAS E TABELAS DO SGP
    ========================================== */
 
 (() => {
@@ -1307,6 +1309,185 @@ selectPeriod("month");
     let token = null;
     let confirmed = false;
     let previewDates = null;
+
+    const technicianMapping = new Map();
+
+
+    /* AJUSTES DA TELA PARA O SGP */
+
+    chat.source.maxLength = 200000;
+
+    chat.source.placeholder =
+        "Cole aqui a tabela completa do SGP, incluindo o cabeçalho.\n" +
+        "Pode colar uma tabela com vários técnicos ou importar um técnico por vez.";
+
+    chat.example.textContent =
+        "Exemplo de texto manual";
+
+    const help = $("#text-help");
+
+    if (help) {
+        help.textContent =
+            "SGP: cole a tabela com ID, Data, Local de Origem, " +
+            "Local de Destino, Status e Itens. " +
+            "As datas vêm da própria tabela. " +
+            "Você também pode digitar retiradas com a quantidade " +
+            "antes do item. Devoluções continuam no formulário próprio.";
+    }
+
+    const intro = root.querySelector(
+        ".share-intro"
+    );
+
+    if (intro) {
+        intro.textContent =
+            "Cole as movimentações do SGP de um ou vários técnicos. " +
+            "Vou separar os itens novos, identificar os técnicos " +
+            "e calcular os custos do catálogo. " +
+            "Nada é lançado até você conferir e confirmar.";
+    }
+
+    const previewHeading = chat.preview.querySelector(
+        ".eyebrow"
+    );
+
+    if (previewHeading) {
+        previewHeading.textContent =
+            "PRÉVIA — SOMENTE RETIRADAS NOVAS";
+    }
+
+    const totalCaption = (
+        chat.previewTotal.previousElementSibling
+    );
+
+    if (totalCaption) {
+        totalCaption.textContent =
+            "Total das novas retiradas reconhecidas";
+    }
+
+
+    /* ASSOCIAÇÃO DOS NOMES DO SGP */
+
+    const mappingBox = createNode(
+        "div",
+        undefined,
+        "text-import-issues"
+    );
+
+    mappingBox.id = "text-sgp-mapping";
+    mappingBox.hidden = true;
+
+    chat.fields.append(mappingBox);
+
+    function clearMappings() {
+        technicianMapping.clear();
+
+        mappingBox.replaceChildren();
+        mappingBox.hidden = true;
+    }
+
+    function renderMappings(destinations) {
+        mappingBox.replaceChildren();
+
+        mappingBox.hidden = (
+            !destinations.length
+        );
+
+        if (!destinations.length) {
+            return;
+        }
+
+        mappingBox.append(
+            createNode(
+                "h4",
+                "Quem são estes técnicos no SGP?"
+            ),
+
+            createNode(
+                "p",
+                "Escolha o técnico de cada destino e clique em " +
+                "Organizar retiradas novamente. A associação será " +
+                "guardada quando você confirmar a importação."
+            )
+        );
+
+        destinations.forEach((destination, index) => {
+            const label = createNode(
+                "label",
+                destination
+            );
+
+            const select = createNode("select");
+
+            select.id =
+                "text-sgp-technician-" + index;
+
+            label.htmlFor = select.id;
+
+            select.required = true;
+            select.style.width = "100%";
+
+            const first = createNode(
+                "option",
+                "Selecione o técnico correspondente"
+            );
+
+            first.value = "";
+
+            select.append(first);
+
+            Array.from(
+                elements.technician.options
+            ).forEach((option) => {
+                if (!option.value) {
+                    return;
+                }
+
+                const choice = createNode(
+                    "option",
+                    option.textContent.trim()
+                );
+
+                choice.value = option.value;
+
+                select.append(choice);
+            });
+
+            select.value = (
+                technicianMapping.get(destination)
+                || ""
+            );
+
+            select.addEventListener(
+                "change",
+                () => {
+                    if (select.value) {
+                        technicianMapping.set(
+                            destination,
+                            select.value
+                        );
+
+                    } else {
+                        technicianMapping.delete(
+                            destination
+                        );
+                    }
+
+                    invalidate();
+
+                    say(
+                        "Associação atualizada. Clique em " +
+                        "Organizar retiradas novamente para " +
+                        "conferir os itens deste técnico."
+                    );
+                }
+            );
+
+            label.append(select);
+
+            mappingBox.append(label);
+        });
+    }
 
 
     /* MENSAGENS */
@@ -1388,7 +1569,7 @@ selectPeriod("month");
     });
 
 
-    /* CONTROLE DOS BOTÕES */
+    /* ESTADO DOS BOTÕES */
 
     function updateConfirm() {
         chat.confirm.disabled = (
@@ -1430,7 +1611,7 @@ selectPeriod("month");
     }
 
 
-    /* INVALIDAR PRÉVIA APÓS EDIÇÃO */
+    /* INVALIDAÇÃO DA PRÉVIA */
 
     function invalidate() {
         if (busy) {
@@ -1456,13 +1637,13 @@ selectPeriod("month");
         updateConfirm();
 
         say(
-            "Texto ou período atualizado. " +
-            "Clique em Organizar retiradas para preparar a prévia."
+            "Texto ou período atualizado. Clique em " +
+            "Organizar retiradas para preparar a prévia."
         );
     }
 
 
-    /* DATA PADRÃO OPCIONAL */
+    /* DATA PADRÃO PARA TEXTO MANUAL */
 
     function updateDefault() {
         chat.defaultLabel.hidden = (
@@ -1486,11 +1667,16 @@ selectPeriod("month");
     }
 
 
-    /* SELEÇÃO DO PERÍODO */
+    /* PERÍODOS */
 
     function showPeriodControls() {
-        const isWeek = chat.period.value === "week";
-        const isMonth = chat.period.value === "month";
+        const isWeek = (
+            chat.period.value === "week"
+        );
+
+        const isMonth = (
+            chat.period.value === "month"
+        );
 
         chat.weekLabel.hidden = !isWeek;
         chat.monthLabel.hidden = !isMonth;
@@ -1559,7 +1745,7 @@ selectPeriod("month");
     }
 
 
-    /* VALIDAÇÃO ANTES DO ENVIO */
+    /* VALIDAÇÃO DO FORMULÁRIO */
 
     function validDates() {
         if (!chat.form.reportValidity()) {
@@ -1576,8 +1762,8 @@ selectPeriod("month");
             end > currentDay
         ) {
             say(
-                "Confira o período: a data final deve ser " +
-                "igual ou posterior à inicial e não pode estar no futuro.",
+                "Confira o período: a data final deve ser igual " +
+                "ou posterior à inicial e não pode estar no futuro.",
                 true
             );
 
@@ -1617,7 +1803,7 @@ selectPeriod("month");
     }
 
 
-    /* ENVIO COM PROTEÇÃO CSRF */
+    /* REQUISIÇÕES DO ASSISTENTE */
 
     async function post(url, payload) {
         return api(
@@ -1636,7 +1822,7 @@ selectPeriod("month");
     }
 
 
-    /* APRESENTAR LINK */
+    /* EXIBIR UM RELATÓRIO */
 
     function showReport(report) {
         if (
@@ -1673,7 +1859,7 @@ selectPeriod("month");
     }
 
 
-    /* MONTAR PRÉVIA */
+    /* EXIBIR A PRÉVIA */
 
     function renderPreview(data) {
         if (
@@ -1712,28 +1898,67 @@ selectPeriod("month");
             data.issues.length === 0
         );
 
+        renderMappings(
+            data.unknown_technicians || []
+        );
+
         for (const row of data.rows) {
             const tr = createNode("tr");
+
+            const itemCell = createNode("td");
+
+            itemCell.append(
+                createNode(
+                    "span",
+                    row.item
+                )
+            );
+
+            if (row.sgp_id) {
+                const origin = createNode(
+                    "small",
+
+                    "SGP #" +
+                    row.sgp_id +
+                    (
+                        row.sgp_serial
+                            ? " · Série/MAC: " + row.sgp_serial
+                            : ""
+                    )
+                );
+
+                origin.style.display = "block";
+                origin.style.marginTop = "5px";
+                origin.style.color = "var(--muted)";
+
+                itemCell.append(origin);
+
+                itemCell.title = (
+                    row.sgp_description ||
+                    row.item
+                );
+            }
 
             tr.append(
                 createNode(
                     "td",
                     displayDate(row.date)
                 ),
+
                 createNode(
                     "td",
                     row.technician
                 ),
-                createNode(
-                    "td",
-                    row.item
-                ),
+
+                itemCell,
+
                 createNode(
                     "td",
                     quantityText(
                         Number(row.quantity)
                     ) + " " + row.unit
                 ),
+
                 createNode(
                     "td",
                     money(Number(row.total))
@@ -1748,13 +1973,18 @@ selectPeriod("month");
 
             const td = createNode(
                 "td",
-                "Nenhuma retirada reconhecida. " +
-                "Confira as pendências abaixo."
+
+                data.all_imported
+                    ? "Todas estas retiradas já foram importadas. " +
+                      "Nenhum lançamento novo."
+                    : "Nenhuma retirada nova reconhecida neste período. " +
+                      "Confira os avisos e as pendências."
             );
 
             td.colSpan = 5;
 
             tr.append(td);
+
             chat.rows.append(tr);
         }
 
@@ -1831,42 +2061,74 @@ selectPeriod("month");
             end: data.end
         };
 
-        if (data.existing_report) {
-            const hasLink = showReport(
+        if (data.issues.length) {
+            say(
+                "Encontrei pendências. Confira os trechos " +
+                "indicados e, se houver nomes desconhecidos, " +
+                "selecione o técnico correspondente. " +
+                "Depois clique em Organizar novamente. " +
+                "Nada foi salvo.",
+                true
+            );
+
+        } else if (data.all_imported) {
+            const hasLink = (
                 data.existing_report
+                    ? showReport(data.existing_report)
+                    : false
             );
 
             say(
-                hasLink
-                    ? "Estas retiradas já foram importadas. " +
-                      "Separei o link do relatório existente. " +
-                      "Nada foi lançado novamente."
-                    : "Estas retiradas já foram importadas " +
-                      "e o link anterior está desativado. " +
-                      "Use Gerar link de relatório para criar outro fechamento."
+                "Estas retiradas já foram importadas. " +
+                "Nada foi lançado novamente." +
+
+                (
+                    hasLink
+                        ? " O link abaixo é do fechamento anterior, de " +
+                          displayDate(data.existing_report.start) +
+                          " a " +
+                          displayDate(data.existing_report.end) +
+                          "."
+                        : ""
+                ) +
+
+                " Para um fechamento geral atualizado, " +
+                "use Gerar link de relatório."
             );
 
         } else if (token) {
+            const events = (
+                data.sgp_events || []
+            ).length;
+
             say(
                 "Beleza! Organizei " +
                 data.rows.length +
-                " itens. Confira os técnicos, as datas, " +
-                "as quantidades e os valores antes de confirmar. " +
+                " itens novos" +
+
+                (
+                    events
+                        ? " de " + events + " movimentações do SGP"
+                        : ""
+                ) +
+
+                ". Confira os técnicos, as datas, " +
+                "as quantidades e os valores. " +
                 "Nada foi salvo ainda."
             );
 
         } else {
             say(
-                "Encontrei pendências. Ajuste o texto " +
-                "e organize novamente. " +
-                "Nenhuma retirada foi salva.",
-                true
+                "Não há retiradas novas para confirmar neste período. " +
+                "Confira os avisos: registros fora do período, " +
+                "sem aprovação ou com outra origem " +
+                "não entram na importação."
             );
         }
     }
 
 
-    /* ORGANIZAR O TEXTO */
+    /* ENVIAR A TABELA OU TEXTO */
 
     chat.form.addEventListener(
         "submit",
@@ -1890,6 +2152,7 @@ selectPeriod("month");
 
             const payload = {
                 text: chat.source.value,
+
                 start: chat.start.value,
                 end: chat.end.value,
 
@@ -1897,6 +2160,10 @@ selectPeriod("month");
                     chat.useDefault.checked
                         ? chat.defaultDate.value
                         : null
+                ),
+
+                technician_mapping: Object.fromEntries(
+                    technicianMapping
                 )
             };
 
@@ -1906,8 +2173,8 @@ selectPeriod("month");
             );
 
             say(
-                "Beleza, vou organizar as retiradas " +
-                "e calcular os valores. " +
+                "Beleza, vou conferir os técnicos, " +
+                "os itens e os IDs já importados. " +
                 "Já te mostro a prévia…"
             );
 
@@ -1936,7 +2203,7 @@ selectPeriod("month");
     );
 
 
-    /* CONFIRMAR, SALVAR E GERAR RELATÓRIO */
+    /* CONFIRMAR E GERAR O LINK */
 
     chat.confirm.addEventListener(
         "click",
@@ -1982,12 +2249,12 @@ selectPeriod("month");
                     }
                 );
 
-                // A gravação já foi concluída.
-                // Não libera nova confirmação se a exibição do link falhar.
                 confirmed = true;
                 token = null;
 
                 chat.preview.hidden = true;
+
+                clearMappings();
 
                 const hasLink = showReport(report);
 
@@ -2006,10 +2273,14 @@ selectPeriod("month");
                           "Gere outro fechamento em Gerar link de relatório."
                 );
 
-                // Mostra na dashboard o período que acabou de ser importado.
                 if (previewDates) {
-                    elements.start.value = previewDates.start;
-                    elements.end.value = previewDates.end;
+                    elements.start.value = (
+                        previewDates.start
+                    );
+
+                    elements.end.value = (
+                        previewDates.end
+                    );
 
                     document.querySelectorAll(
                         "[data-period]"
@@ -2027,7 +2298,6 @@ selectPeriod("month");
 
                 refreshDashboard();
 
-                // Atualiza a lista de links já existente no HTML.
                 const reload = $("#share-reload");
 
                 if (reload && !reload.disabled) {
@@ -2037,6 +2307,7 @@ selectPeriod("month");
             } catch (error) {
                 say(
                     error.message +
+
                     (
                         confirmed
                             ? " A gravação foi concluída. " +
@@ -2046,6 +2317,7 @@ selectPeriod("month");
                               "Confirmar novamente: a mesma prévia " +
                               "não é gravada duas vezes."
                     ),
+
                     true
                 );
 
@@ -2056,7 +2328,7 @@ selectPeriod("month");
     );
 
 
-    /* COPIAR O LINK */
+    /* COPIAR LINK */
 
     chat.copy.addEventListener(
         "click",
@@ -2139,7 +2411,10 @@ selectPeriod("month");
 
     chat.source.addEventListener(
         "input",
-        invalidate
+        () => {
+            clearMappings();
+            invalidate();
+        }
     );
 
     chat.defaultDate.addEventListener(
@@ -2153,7 +2428,7 @@ selectPeriod("month");
     );
 
 
-    /* EXEMPLO */
+    /* EXEMPLO DE TEXTO MANUAL */
 
     chat.example.addEventListener(
         "click",
@@ -2175,6 +2450,8 @@ selectPeriod("month");
                 applyPeriod();
             }
 
+            clearMappings();
+
             chat.source.value =
                 displayDate(chat.start.value) + "\n" +
                 "Rogério pegou 3 APC e 4 cunhas.\n" +
@@ -2194,12 +2471,13 @@ selectPeriod("month");
     );
 
 
-    /* INICIALIZAÇÃO DO ASSISTENTE */
+    /* INICIALIZAÇÃO */
 
     applyPeriod();
 
     say(
-        "Olá! Me conte o que cada técnico retirou. " +
-        "Vou preparar uma prévia para você conferir."
+        "Olá! Cole a tabela do SGP de um ou vários técnicos. " +
+        "Vou organizar as retiradas novas para você conferir " +
+        "e gerar o relatório."
     );
 })();
