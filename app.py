@@ -2,6 +2,7 @@ import os
 import secrets
 import io
 import csv
+import re
 import json
 import hashlib
 
@@ -31,7 +32,11 @@ from werkzeug.security import (
     check_password_hash,
 )
 
-from leitor_retiradas import organizar_retiradas
+from leitor_retiradas import (
+    organizar_retiradas,
+    normalizar,
+    _tecnico_sgp,
+)
 
 
 # ==========================================================
@@ -183,7 +188,7 @@ class Movement(db.Model):
         nullable=False,
     )
 
-    # Preço histórico utilizado no lançamento.
+    # Preço histórico da movimentação.
     cost = db.Column(
         db.Numeric(18, 9),
         nullable=False,
@@ -234,7 +239,6 @@ class SharedReport(db.Model):
         nullable=False,
     )
 
-    # Cópia dos dados no momento da geração.
     snapshot = db.Column(
         db.JSON,
         nullable=False,
@@ -254,13 +258,6 @@ class SharedReport(db.Model):
 
 
 class TextImport(db.Model):
-    """
-    Guarda as prévias das retiradas por texto.
-
-    O relatório associado identifica que a importação
-    já foi confirmada, evitando repetir a gravação.
-    """
-
     __tablename__ = "text_import"
 
     id = db.Column(
@@ -299,6 +296,72 @@ class TextImport(db.Model):
     report_id = db.Column(
         db.Integer,
         db.ForeignKey("shared_report.id"),
+    )
+
+
+class SgpImport(db.Model):
+    """
+    Cada ID do SGP pode ser importado uma única vez.
+    Guarda os dados de origem para conferência.
+    """
+
+    __tablename__ = "sgp_import"
+
+    external_id = db.Column(
+        db.String(30),
+        primary_key=True,
+    )
+
+    fingerprint = db.Column(
+        db.String(64),
+        nullable=False,
+    )
+
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey("shared_report.id"),
+        nullable=False,
+    )
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False,
+    )
+
+    source_data = db.Column(
+        db.JSON,
+        nullable=False,
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+
+class SgpTechnicianAlias(db.Model):
+    """
+    Associa um nome utilizado no SGP a um técnico cadastrado.
+    """
+
+    __tablename__ = "sgp_technician_alias"
+
+    destination_key = db.Column(
+        db.String(160),
+        primary_key=True,
+    )
+
+    destination = db.Column(
+        db.String(160),
+        nullable=False,
+    )
+
+    technician_id = db.Column(
+        db.Integer,
+        db.ForeignKey("technician.id"),
+        nullable=False,
     )
 
 
@@ -389,8 +452,7 @@ def init_db():
                 )
             )
 
-    # Cria também a tabela text_import.
-    # Não apaga os registros existentes.
+    # Cria as tabelas novas sem apagar as existentes.
     db.create_all()
 
     for name in TECHNICIANS:
@@ -575,7 +637,7 @@ def logout():
 
 
 # ==========================================================
-# PÁGINA PRINCIPAL
+# DASHBOARD
 # ==========================================================
 
 @app.get("/")
@@ -712,6 +774,7 @@ def summary(
 
     technicians = {
         technician.name: Decimal(0)
+
         for technician in db.session.scalars(
             select(Technician).order_by(
                 Technician.name
@@ -834,10 +897,6 @@ def summary(
     }
 
 
-# ==========================================================
-# DADOS DA DASHBOARD
-# ==========================================================
-
 @app.get("/api/dashboard")
 @protected
 def dashboard():
@@ -847,7 +906,7 @@ def dashboard():
 
 
 # ==========================================================
-# RETIRADAS COM SALDO PARA DEVOLUÇÃO
+# RETIRADAS DISPONÍVEIS PARA DEVOLUÇÃO
 # ==========================================================
 
 @app.get("/api/withdrawals")
@@ -1165,10 +1224,7 @@ def build_pdf(data, issued_at=None):
         )
 
         pdf.rect(
-            0,
-            525,
-            842,
-            70,
+            0, 525, 842, 70,
             fill=1,
             stroke=0,
         )
@@ -1506,7 +1562,7 @@ def shared_period(payload):
 
 
 # ==========================================================
-# LINKS DOS RELATÓRIOS
+# RELATÓRIOS COMPARTILHADOS
 # ==========================================================
 
 def report_url(report):
@@ -1711,7 +1767,81 @@ def shared_report_pdf(token):
 
 
 # ==========================================================
-# IMPORTAÇÃO POR TEXTO — PRÉVIA
+# ASSISTENTE — CATÁLOGO E NOMES DO SGP
+# ==========================================================
+
+def sgp_destination_key(value):
+    value = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        normalizar(value),
+    ).strip()
+
+    return " ".join(
+        re.sub(
+            r"\btecnic[oa]\b",
+            "",
+            value,
+        ).split()
+    )
+
+
+def import_catalog():
+    technicians = [
+        {
+            "id": technician.id,
+            "name": technician.name,
+            "sgp_aliases": [],
+        }
+
+        for technician in db.session.scalars(
+            select(Technician).order_by(
+                Technician.name
+            )
+        )
+    ]
+
+    by_id = {
+        technician["id"]: technician
+        for technician in technicians
+    }
+
+    aliases = db.session.scalars(
+        select(SgpTechnicianAlias)
+    ).all()
+
+    for alias in aliases:
+        if alias.technician_id in by_id:
+            by_id[
+                alias.technician_id
+            ]["sgp_aliases"].append(
+                alias.destination
+            )
+
+    return technicians, by_id, aliases
+
+
+@app.get("/api/text-import/catalog")
+@protected
+def text_import_catalog():
+    technicians, _, aliases = import_catalog()
+
+    return jsonify(
+        technicians=technicians,
+
+        aliases=[
+            {
+                "destination": alias.destination,
+                "technician_id": alias.technician_id,
+            }
+
+            for alias in aliases
+        ],
+    )
+
+
+# ==========================================================
+# ASSISTENTE — ORGANIZAR E PREPARAR PRÉVIA
 # ==========================================================
 
 @app.post("/api/text-import/preview")
@@ -1730,7 +1860,7 @@ def text_import_preview():
             str,
         ):
             raise ValueError(
-                "Escreva as retiradas no campo de texto."
+                "Cole a tabela do SGP ou escreva as retiradas."
             )
 
         start = date.fromisoformat(
@@ -1747,20 +1877,100 @@ def text_import_preview():
             or end > today()
         ):
             raise ValueError(
-                "Escolha um período de até 367 dias, "
-                "sem datas futuras."
+                "Escolha até 367 dias, sem datas futuras."
             )
 
-        technicians = [
-            {
-                "id": technician.id,
-                "name": technician.name,
-            }
+        technicians, by_id, aliases = import_catalog()
 
-            for technician in db.session.scalars(
-                select(Technician)
+        saved_aliases = {
+            alias.destination_key: alias
+            for alias in aliases
+        }
+
+        mappings = (
+            payload.get("technician_mapping")
+            or {}
+        )
+
+        if (
+            not isinstance(mappings, dict)
+            or len(mappings) > 50
+        ):
+            raise ValueError(
+                "Associações de técnicos inválidas."
             )
-        ]
+
+        new_aliases = []
+
+        # Associações escolhidas explicitamente na prévia.
+        for destination, technician_id in mappings.items():
+            if (
+                not isinstance(destination, str)
+                or not destination.strip()
+                or len(destination) > 160
+            ):
+                raise ValueError(
+                    "Nome de destino inválido na associação."
+                )
+
+            if isinstance(technician_id, bool):
+                raise ValueError(
+                    "Escolha o técnico correspondente "
+                    "ao destino do SGP."
+                )
+
+            technician = by_id.get(
+                int(technician_id)
+            )
+
+            if not technician:
+                raise ValueError(
+                    "Escolha um técnico cadastrado."
+                )
+
+            key = sgp_destination_key(
+                destination
+            )
+
+            if not key:
+                raise ValueError(
+                    "Destino inválido na associação."
+                )
+
+            known = _tecnico_sgp(
+                destination,
+                technicians,
+            )
+
+            if (
+                known
+                and known["id"] != technician["id"]
+            ):
+                raise ValueError(
+                    "Este destino já corresponde a "
+                    + known["name"]
+                    + ". Confira a associação."
+                )
+
+            if (
+                key in saved_aliases
+                and saved_aliases[key].technician_id
+                != technician["id"]
+            ):
+                raise ValueError(
+                    "Este destino já está associado "
+                    "a outro técnico."
+                )
+
+            technician["sgp_aliases"].append(
+                destination
+            )
+
+            new_aliases.append({
+                "destination": destination.strip(),
+                "destination_key": key,
+                "technician_id": technician["id"],
+            })
 
         items = [
             {
@@ -1791,6 +2001,114 @@ def text_import_preview():
             hoje=today(),
         )
 
+        result["start"] = start.isoformat()
+        result["end"] = end.isoformat()
+
+        result["token"] = None
+        result["existing_report"] = None
+        result["existing_reports"] = []
+
+        result.setdefault(
+            "warnings",
+            [],
+        )
+
+        result["requires_duplicate_ack"] = False
+        result["already_imported_ids"] = []
+        result["all_imported"] = False
+
+        new_events = []
+
+        # Retira da prévia os IDs já gravados.
+        if result.get("format") == "sgp":
+            new_ids = set()
+            existing_report_ids = set()
+
+            for event in result["sgp_events"]:
+                external_id = event["id"]
+
+                if len(external_id) > 30:
+                    raise ValueError(
+                        "O ID do SGP deve ter até 30 dígitos."
+                    )
+
+                imported = db.session.get(
+                    SgpImport,
+                    external_id,
+                )
+
+                if imported:
+                    result["already_imported_ids"].append(
+                        external_id
+                    )
+
+                    if (
+                        imported.fingerprint
+                        != event["fingerprint"]
+                    ):
+                        result["issues"].append({
+                            "message": (
+                                "SGP "
+                                + external_id
+                                + ": já importado com outro conteúdo. "
+                                "Confira no SGP antes de prosseguir."
+                            ),
+                            "excerpt": external_id,
+                        })
+
+                    else:
+                        result["warnings"].append(
+                            "SGP "
+                            + external_id
+                            + ": já importado; "
+                            "não será lançado novamente."
+                        )
+
+                        existing_report_ids.add(
+                            imported.report_id
+                        )
+
+                else:
+                    new_ids.add(
+                        external_id
+                    )
+
+                    new_events.append(event)
+
+            result["rows"] = [
+                row
+                for row in result["rows"]
+                if row["sgp_id"] in new_ids
+            ]
+
+            result["sgp_events"] = new_events
+
+            result["all_imported"] = (
+                bool(result["already_imported_ids"])
+                and not result["rows"]
+                and not result["issues"]
+            )
+
+            for report_id in sorted(existing_report_ids):
+                old_report = db.session.get(
+                    SharedReport,
+                    report_id,
+                )
+
+                if old_report:
+                    result["existing_reports"].append(
+                        report_info(old_report)
+                    )
+
+            if (
+                result["all_imported"]
+                and len(result["existing_reports"]) == 1
+            ):
+                result["existing_report"] = (
+                    result["existing_reports"][0]
+                )
+
+        # Totais apenas dos itens novos que estão na prévia.
         total = Decimal(0)
         totals = {}
 
@@ -1821,47 +2139,60 @@ def text_import_preview():
             for name, value in totals.items()
         }
 
-        result["start"] = start.isoformat()
-        result["end"] = end.isoformat()
+        result["can_confirm"] = (
+            bool(result["rows"])
+            and not result["issues"]
+        )
 
-        result["token"] = None
-        result["existing_report"] = None
-        result["warnings"] = []
-
-        # Itens reconhecidos podem aparecer na prévia,
-        # mas nenhuma confirmação é liberada com pendências.
         if not result["can_confirm"]:
             return jsonify(result)
 
-        # Identificação do conjunto de retiradas.
-        # Detecta também o mesmo conteúdo em outra ordem.
-        grouped = {}
+        # Assinatura da prévia.
+        if result.get("format") == "sgp":
+            canonical = [
+                "sgp",
+                result["start"],
+                result["end"],
 
-        for row in result["rows"]:
-            key = (
-                row["date"],
-                row["technician_id"],
-                row["item_id"],
-            )
+                sorted(
+                    (
+                        event["id"],
+                        event["fingerprint"],
+                    )
 
-            grouped[key] = (
-                grouped.get(key, Decimal(0))
-                + Decimal(row["quantity"])
-            )
-
-        canonical = [
-            (
-                list(key),
-                format(
-                    quantity.normalize(),
-                    "f",
+                    for event in new_events
                 ),
-            )
+            ]
 
-            for key, quantity in sorted(
-                grouped.items()
-            )
-        ]
+        else:
+            grouped = {}
+
+            for row in result["rows"]:
+                key = (
+                    row["date"],
+                    row["technician_id"],
+                    row["item_id"],
+                )
+
+                grouped[key] = (
+                    grouped.get(key, Decimal(0))
+                    + Decimal(row["quantity"])
+                )
+
+            canonical = [
+                (
+                    list(key),
+
+                    format(
+                        quantity.normalize(),
+                        "f",
+                    ),
+                )
+
+                for key, quantity in sorted(
+                    grouped.items()
+                )
+            ]
 
         fingerprint = hashlib.sha256(
             json.dumps(
@@ -1879,24 +2210,23 @@ def text_import_preview():
             .with_for_update()
         )
 
-        # Importação já confirmada:
-        # devolve o relatório anterior e não lança novamente.
         if draft and draft.report_id:
             result["can_confirm"] = False
+            result["all_imported"] = True
 
             result["warnings"].append(
-                "Estas retiradas já foram importadas. "
-                "Nenhuma foi lançada novamente."
+                "Estas retiradas já foram confirmadas. "
+                "Nada foi lançado novamente."
             )
 
-            report = db.session.get(
+            old_report = db.session.get(
                 SharedReport,
                 draft.report_id,
             )
 
-            if report:
+            if old_report:
                 result["existing_report"] = (
-                    report_info(report)
+                    report_info(old_report)
                 )
 
             return jsonify(result)
@@ -1909,8 +2239,8 @@ def text_import_preview():
 
             result["issues"].append({
                 "message": (
-                    "Estas retiradas já possuem uma prévia "
-                    "em outra conta. Confira o histórico."
+                    "Esta importação tem uma prévia em outra "
+                    "conta. Confira com o responsável."
                 ),
                 "excerpt": "",
             })
@@ -1924,17 +2254,49 @@ def text_import_preview():
                 user_id=session["user"],
             )
 
-            db.session.add(draft)
+        duplicate = False
 
-        # Cada nova prévia invalida o token anterior.
+        # No SGP, IDs diferentes podem ter os mesmos itens,
+        # quantidades, técnico e data.
+        # O controle principal é o ID de origem.
+        #
+        # Para texto manual, continua o aviso de coincidência.
+        if result.get("format") != "sgp":
+            for row in result["rows"]:
+                existing = db.session.scalar(
+                    select(Movement.id)
+                    .where(
+                        Movement.day
+                        == date.fromisoformat(row["date"]),
+
+                        Movement.technician_id
+                        == row["technician_id"],
+
+                        Movement.item_id
+                        == row["item_id"],
+
+                        Movement.quantity
+                        == Decimal(row["quantity"]),
+
+                        Movement.kind == "retirada",
+                    )
+                    .limit(1)
+                )
+
+                if existing is not None:
+                    duplicate = True
+                    break
+
         draft.token = secrets.token_urlsafe(32)
 
-        # Dados de confirmação ficam no servidor.
-        # O navegador não escolhe os preços ao confirmar.
         draft.payload = {
             "rows": result["rows"],
             "start": result["start"],
             "end": result["end"],
+            "possible_duplicates": duplicate,
+            "format": result.get("format", "texto"),
+            "sgp_events": new_events,
+            "technician_aliases": new_aliases,
         }
 
         draft.expires_at = (
@@ -1942,39 +2304,7 @@ def text_import_preview():
             + timedelta(minutes=30)
         )
 
-        # Verifica possíveis coincidências com o histórico.
-        duplicate = False
-
-        for row in result["rows"]:
-            existing = db.session.scalar(
-                select(Movement.id)
-                .where(
-                    Movement.day == date.fromisoformat(
-                        row["date"]
-                    ),
-
-                    Movement.technician_id
-                    == row["technician_id"],
-
-                    Movement.item_id
-                    == row["item_id"],
-
-                    Movement.quantity
-                    == Decimal(row["quantity"]),
-
-                    Movement.kind == "retirada",
-                )
-                .limit(1)
-            )
-
-            if existing is not None:
-                duplicate = True
-                break
-
-        draft.payload = {
-            **draft.payload,
-            "possible_duplicates": duplicate,
-        }
+        db.session.add(draft)
 
         result["requires_duplicate_ack"] = duplicate
 
@@ -1996,7 +2326,7 @@ def text_import_preview():
 
         return jsonify(
             error=(
-                "Esta prévia foi criada em outra requisição. "
+                "Outra requisição criou esta prévia. "
                 "Clique em Organizar novamente."
             )
         ), 409
@@ -2018,7 +2348,7 @@ def text_import_preview():
 
 
 # ==========================================================
-# IMPORTAÇÃO POR TEXTO — CONFIRMAR E GERAR LINK
+# ASSISTENTE — CONFIRMAR E GERAR RELATÓRIO
 # ==========================================================
 
 @app.post("/api/text-import/confirm")
@@ -2045,15 +2375,10 @@ def text_import_confirm():
         or len(token) > 64
     ):
         return jsonify(
-            error=(
-                "Prévia inválida. "
-                "Organize o texto novamente."
-            )
+            error="Prévia inválida. Organize novamente."
         ), 400
 
     try:
-        # No PostgreSQL, bloqueia a prévia durante a gravação
-        # para evitar duas confirmações simultâneas.
         draft = db.session.scalar(
             select(TextImport)
             .where(
@@ -2065,12 +2390,10 @@ def text_import_confirm():
 
         if not draft:
             return jsonify(
-                error=(
-                    "Prévia não encontrada nesta conta."
-                )
+                error="Prévia não encontrada nesta conta."
             ), 404
 
-        # Repetir a confirmação retorna o mesmo relatório.
+        # Repetir a confirmação devolve o mesmo relatório.
         if draft.report_id:
             report = db.session.get(
                 SharedReport,
@@ -2087,7 +2410,7 @@ def text_import_confirm():
             return jsonify(
                 error=(
                     "A prévia expirou. "
-                    "Organize o texto novamente."
+                    "Clique em Organizar novamente."
                 )
             ), 409
 
@@ -2104,11 +2427,56 @@ def text_import_confirm():
 
         rows = draft.payload["rows"]
 
-        if not rows or len(rows) > 500:
+        if not rows or len(rows) > 1000:
             raise ValueError(
-                "Prévia inválida. "
-                "Organize o texto novamente."
+                "Prévia inválida. Organize novamente."
             )
+
+        start = date.fromisoformat(
+            draft.payload["start"]
+        )
+
+        end = date.fromisoformat(
+            draft.payload["end"]
+        )
+
+        events = draft.payload.get(
+            "sgp_events",
+            [],
+        )
+
+        event_ids = {
+            event["id"]
+            for event in events
+        }
+
+        if draft.payload.get("format") == "sgp":
+            if (
+                not events
+                or any(
+                    row.get("sgp_id") not in event_ids
+                    for row in rows
+                )
+            ):
+                raise ValueError(
+                    "A origem dos itens está incompleta. "
+                    "Organize novamente."
+                )
+
+            # Outra importação pode ter ocorrido
+            # depois de a prévia ser preparada.
+            for event in events:
+                if db.session.get(
+                    SgpImport,
+                    event["id"],
+                ):
+                    raise ValueError(
+                        "SGP "
+                        + event["id"]
+                        + " foi importado depois desta prévia. "
+                        "Clique em Organizar novamente para "
+                        "separar apenas os registros novos."
+                    )
 
         for row in rows:
             item = db.session.get(
@@ -2123,19 +2491,19 @@ def text_import_confirm():
 
             if not item or not technician:
                 raise ValueError(
-                    "O catálogo mudou. "
-                    "Organize o texto novamente."
+                    "O catálogo mudou. Organize novamente."
                 )
 
             if (
                 Decimal(str(item.cost))
                 != Decimal(row["cost"])
                 or item.unit != row["unit"]
+                or item.name != row["item"]
+                or technician.name != row["technician"]
             ):
                 raise ValueError(
-                    "Um custo ou unidade mudou. "
-                    "Organize o texto novamente "
-                    "para conferir os valores."
+                    "Um cadastro ou custo mudou. "
+                    "Organize novamente para conferir os valores."
                 )
 
             day = date.fromisoformat(
@@ -2147,10 +2515,12 @@ def text_import_confirm():
             )
 
             if (
-                day > today()
+                not start <= day <= end
+                or day > today()
                 or not quantity.is_finite()
                 or quantity <= 0
                 or quantity > 1000000
+                or quantity.as_tuple().exponent < -3
             ):
                 raise ValueError(
                     "Data ou quantidade inválida na prévia."
@@ -2158,11 +2528,30 @@ def text_import_confirm():
 
             if (
                 item.unit != "m"
-                and quantity
-                != quantity.to_integral_value()
+                and quantity != quantity.to_integral_value()
             ):
                 raise ValueError(
                     "Este item exige unidades inteiras."
+                )
+
+            if row.get("sgp_id"):
+                note = (
+                    "SGP #"
+                    + row["sgp_id"]
+                    + " | "
+                    + row.get("sgp_datetime", "")
+                )
+
+                if row.get("sgp_serial"):
+                    note += (
+                        " | Série/MAC: "
+                        + row["sgp_serial"]
+                    )
+
+            else:
+                note = (
+                    "Retirada importada por texto e "
+                    "conferida antes da confirmação."
                 )
 
             db.session.add(
@@ -2173,32 +2562,11 @@ def text_import_confirm():
                     quantity=quantity,
                     cost=item.cost,
                     kind="retirada",
-
-                    note=(
-                        "Retirada importada por texto e "
-                        "conferida antes da confirmação."
-                    ),
+                    note=note[:300],
                 )
             )
 
-        # Disponibiliza as novas retiradas para o cálculo,
-        # ainda sem confirmar a transação.
         db.session.flush()
-
-        start = date.fromisoformat(
-            draft.payload["start"]
-        )
-
-        end = date.fromisoformat(
-            draft.payload["end"]
-        )
-
-        # O fechamento reúne todas as movimentações do período,
-        # incluindo as que já existiam e as recém-importadas.
-        snapshot = summary(
-            start,
-            end,
-        )
 
         generated = datetime.now(
             ZoneInfo("America/Sao_Paulo")
@@ -2207,6 +2575,13 @@ def text_import_confirm():
         title = (
             f"Relatório de retiradas — "
             f"{start:%d/%m/%Y} a {end:%d/%m/%Y}"
+        )
+
+        # Inclui todas as movimentações do período:
+        # as anteriores e as recém-importadas.
+        snapshot = summary(
+            start,
+            end,
         )
 
         snapshot.update(
@@ -2228,6 +2603,13 @@ def text_import_confirm():
             ),
 
             imported_count=len(rows),
+
+            source=draft.payload.get(
+                "format",
+                "texto",
+            ),
+
+            sgp_ids=sorted(event_ids),
         )
 
         report = SharedReport(
@@ -2239,18 +2621,77 @@ def text_import_confirm():
         db.session.add(report)
         db.session.flush()
 
+        # Guarda cada ID de origem com os seus itens.
+        for event in events:
+            db.session.add(
+                SgpImport(
+                    external_id=event["id"],
+                    fingerprint=event["fingerprint"],
+                    report_id=report.id,
+                    user_id=session["user"],
+
+                    source_data={
+                        "event": event,
+
+                        "rows": [
+                            row
+                            for row in rows
+                            if row.get("sgp_id") == event["id"]
+                        ],
+                    },
+                )
+            )
+
+        # As associações escolhidas são salvas
+        # somente quando a importação é confirmada.
+        for alias in draft.payload.get(
+            "technician_aliases",
+            [],
+        ):
+            existing = db.session.get(
+                SgpTechnicianAlias,
+                alias["destination_key"],
+            )
+
+            if existing:
+                if (
+                    existing.technician_id
+                    != alias["technician_id"]
+                ):
+                    raise ValueError(
+                        "Uma associação de técnico mudou. "
+                        "Organize novamente."
+                    )
+
+            else:
+                db.session.add(
+                    SgpTechnicianAlias(**alias)
+                )
+
         draft.report_id = report.id
 
-        # Movimentações e relatório são gravados juntos.
-        # Se houver erro antes do commit, tudo é revertido.
+        # Tudo é gravado na mesma transação.
+        # Qualquer erro reverte esta tentativa inteira.
         db.session.commit()
 
         return jsonify(
             ok=True,
             reused=False,
             imported_count=len(rows),
+            sgp_count=len(events),
             **report_info(report),
         ), 201
+
+    except IntegrityError:
+        db.session.rollback()
+
+        return jsonify(
+            error=(
+                "Outra confirmação importou um destes IDs "
+                "ou associações. Nada desta tentativa foi salvo. "
+                "Clique em Organizar novamente."
+            )
+        ), 409
 
     except (
         ValueError,
@@ -2263,7 +2704,7 @@ def text_import_confirm():
         return jsonify(
             error=(
                 str(error)
-                or "Não foi possível confirmar a prévia."
+                or "Não foi possível confirmar."
             )
         ), 400
 
