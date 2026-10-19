@@ -1,27 +1,33 @@
 """
-ALMOXARIFADO MATRIZ — LEITURA DE RETIRADAS
+ALMOXARIFADO MATRIZ
+Leitura de retiradas digitadas e tabelas copiadas do SGP.
 
-Organiza retiradas escritas em texto.
-
-Este arquivo:
-- Não grava movimentações.
-- Não altera o banco de dados.
-- Não gera links sozinho.
-- Retorna uma prévia e as pendências encontradas.
-
-Qualquer pendência impede a confirmação do texto inteiro.
+Este módulo organiza os dados para a prévia.
+Não grava movimentações nem gera relatórios sozinho.
 """
 
+import csv
+import hashlib
+import io
+import json
 import re
 import unicodedata
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from html import unescape
+from html.parser import HTMLParser
 
 
-# NOMES ALTERNATIVOS CONHECIDOS
+# ==========================================================
+# NOMES E APELIDOS
+# ==========================================================
 
 APELIDOS_TECNICOS = {
+    "magno": [
+        "magnovanio",
+    ],
+
     "wildiney": [
         "wild",
         "wildinei",
@@ -78,33 +84,13 @@ APELIDOS_ITENS = {
         "miniflat drop",
     ],
 
-    "xc220": [
-        "xc 220",
-    ],
-
-    "xx530": [
-        "xx 530",
-    ],
-
-    "xx535": [
-        "xx 535",
-    ],
-
-    "xx230": [
-        "xx 230",
-    ],
-
-    "121ac": [
-        "121 ac",
-    ],
-
-    "1200r": [
-        "1200 r",
-    ],
-
-    "ex141": [
-        "ex 141",
-    ],
+    "xc220": ["xc 220"],
+    "xx530": ["xx 530"],
+    "xx535": ["xx 535"],
+    "xx230": ["xx 230"],
+    "121ac": ["121 ac"],
+    "1200r": ["1200 r"],
+    "ex141": ["ex 141"],
 
     "halos12": [
         "halo s12",
@@ -112,22 +98,15 @@ APELIDOS_ITENS = {
         "halos 12",
     ],
 
-    "mr60x": [
-        "mr 60x",
-    ],
-
-    "onu 1010": [
-        "onu1010",
-    ],
-
-    "firestick": [
-        "fire stick",
-    ],
+    "mr60x": ["mr 60x"],
+    "onu 1010": ["onu1010"],
+    "firestick": ["fire stick"],
 }
 
 
-# QUANTIDADES POR EXTENSO
-# Quantidades maiores também podem ser escritas em algarismos.
+# ==========================================================
+# QUANTIDADES E UNIDADES
+# ==========================================================
 
 NUMEROS = {
     "um": 1,
@@ -163,9 +142,6 @@ NUMEROS = {
     "cem": 100,
 }
 
-
-# PALAVRAS ACEITAS ENTRE OS DADOS
-
 LIGACOES = {
     "pegou",
     "retirou",
@@ -191,9 +167,6 @@ LIGACOES = {
     "em",
 }
 
-
-# UNIDADES E EMBALAGENS
-
 UNIDADES = {
     "un": "un",
     "unidade": "un",
@@ -217,9 +190,6 @@ UNIDADES = {
     "caixas": "caixa",
 }
 
-# Conversões para a unidade usada no catálogo.
-# Não faz conversões de embalagens desconhecidas.
-
 EMBALAGENS = {
     ("abracadeira", "pacote"): Decimal("100"),
     ("miguelao", "pacote"): Decimal("100"),
@@ -238,14 +208,16 @@ DIAS = {
 }
 
 
+# ==========================================================
 # NORMALIZAÇÃO
+# ==========================================================
 
 def normalizar(texto):
     return "".join(
         caractere
         for caractere in unicodedata.normalize(
             "NFKD",
-            texto.lower(),
+            str(texto).lower(),
         )
         if not unicodedata.combining(caractere)
     )
@@ -259,6 +231,14 @@ def tokens(texto):
         r"|[^\w\s]",
         normalizar(texto),
     )
+
+
+def _chave(texto):
+    return re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        normalizar(texto),
+    ).strip()
 
 
 def _mapa(registros, apelidos):
@@ -285,7 +265,6 @@ def _mapa(registros, apelidos):
 
             resultado[chave] = registro
 
-    # Nomes completos são procurados antes dos nomes menores.
     return sorted(
         resultado.items(),
         key=lambda par: len(par[0]),
@@ -308,8 +287,6 @@ def _encontrar(partes, posicao, mapa):
 def _quantidade(partes, posicao):
     palavra = partes[posicao]
 
-    # Sem separador de milhar para evitar interpretações ambíguas.
-    # Exemplos aceitos: 1000, 12,5 e 0,125.
     if re.fullmatch(
         r"\d+(?:,\d{1,3})?",
         palavra,
@@ -342,85 +319,105 @@ def _quantidade(partes, posicao):
     return None, 0
 
 
-# ORGANIZAÇÃO DO TEXTO
+# ==========================================================
+# VALIDAÇÃO E RESULTADO
+# ==========================================================
 
-def organizar_retiradas(
+def _linha(item, tecnico, dia, quantidade):
+    custo = Decimal(
+        str(item["cost"])
+    )
+
+    if not custo.is_finite() or custo < 0:
+        raise ValueError(
+            "Custo inválido no catálogo: "
+            + item["name"]
+        )
+
+    if (
+        not quantidade.is_finite()
+        or quantidade <= 0
+        or quantidade > 1000000
+        or quantidade.as_tuple().exponent < -3
+        or (
+            item["unit"] != "m"
+            and quantidade != quantidade.to_integral_value()
+        )
+    ):
+        raise ValueError(
+            "Quantidade inválida para "
+            + item["name"]
+        )
+
+    return {
+        "date": dia.isoformat(),
+
+        "technician_id": tecnico["id"],
+        "technician": tecnico["name"],
+
+        "item_id": item["id"],
+        "item": item["name"],
+
+        "unit": item["unit"],
+        "category": item["category"],
+
+        "quantity": str(quantidade),
+        "cost": str(custo),
+
+        "kind": "retirada",
+    }
+
+
+def _resultado(
+    linhas,
+    pendencias,
+    padrao=None,
+    avisos=None,
+    eventos=None,
+    formato="texto",
+):
+    linhas.sort(
+        key=lambda linha: (
+            linha["date"],
+            linha["technician"],
+            linha["item"],
+        )
+    )
+
+    return {
+        "rows": linhas,
+        "issues": pendencias,
+        "warnings": avisos or [],
+
+        "can_confirm": (
+            bool(linhas)
+            and not pendencias
+        ),
+
+        "used_default_date": (
+            padrao.isoformat()
+            if padrao
+            else None
+        ),
+
+        "format": formato,
+        "sgp_events": eventos or [],
+    }
+
+
+# ==========================================================
+# TEXTO DIGITADO
+# Mantém a compatibilidade com a primeira versão.
+# ==========================================================
+
+def _organizar_texto(
     texto,
     tecnicos,
     itens,
     inicio,
     fim,
-    data_padrao=None,
-    hoje=None,
+    padrao,
 ):
-    """
-    Recebe:
-        texto: retiradas escritas pelo usuário.
-
-        tecnicos:
-            [{"id": 1, "name": "Rogério"}, ...]
-
-        itens:
-            [{
-                "id": 1,
-                "name": "APC",
-                "unit": "un",
-                "category": "material",
-                "cost": "6.10",
-            }, ...]
-
-        inicio e fim:
-            Datas ISO: "2026-10-12".
-
-        data_padrao:
-            Data escolhida explicitamente pelo usuário
-            para as retiradas que não possuem data no texto.
-
-        hoje:
-            Data atual de Brasília fornecida pelo app.py.
-
-    Retorna:
-        rows: itens reconhecidos.
-        issues: pendências.
-        can_confirm: se o texto inteiro pode ser confirmado.
-
-    Não grava dados.
-    """
-
-    hoje = hoje or date.today()
-
-    inicio = date.fromisoformat(inicio)
-    fim = date.fromisoformat(fim)
-
-    if (
-        fim < inicio
-        or (fim - inicio).days > 366
-        or fim > hoje
-    ):
-        raise ValueError(
-            "Selecione um período válido, sem datas futuras."
-        )
-
-    padrao = (
-        date.fromisoformat(data_padrao)
-        if data_padrao
-        else None
-    )
-
-    if padrao and not inicio <= padrao <= fim:
-        raise ValueError(
-            "A data padrão deve estar dentro do período."
-        )
-
-    if (
-        not isinstance(texto, str)
-        or not texto.strip()
-        or len(texto) > 20000
-    ):
-        raise ValueError(
-            "Escreva as retiradas em até 20.000 caracteres."
-        )
-
     mapa_tecnicos = _mapa(
         tecnicos,
         APELIDOS_TECNICOS,
@@ -439,45 +436,39 @@ def organizar_retiradas(
     tecnico = None
     dia = padrao
     nome_sem_item = False
-
     posicao = 0
 
     def problema(mensagem, pos=None):
         pos = posicao if pos is None else pos
 
-        trecho = " ".join(
-            partes[max(0, pos - 2):pos + 7]
-        )
-
         pendencias.append({
             "message": mensagem,
-            "excerpt": trecho,
+
+            "excerpt": " ".join(
+                partes[max(0, pos - 2):pos + 7]
+            ),
         })
 
     while posicao < len(partes):
         palavra = partes[posicao]
 
-        if palavra in {
-            ",",
-            ";",
-            ":",
-            ".",
-            "(",
-            ")",
-        }:
-            posicao += 1
-            continue
-
-        # Aceita o hífen em "segunda-feira", etc.
         if (
-            palavra == "-"
-            and posicao
-            and partes[posicao - 1] in DIAS
+            palavra in {
+                ",",
+                ";",
+                ":",
+                ".",
+                "(",
+                ")",
+            }
+            or (
+                palavra == "-"
+                and posicao
+                and partes[posicao - 1] in DIAS
+            )
         ):
             posicao += 1
             continue
-
-        # TÉCNICO
 
         encontrado, tamanho = _encontrar(
             partes,
@@ -488,8 +479,8 @@ def organizar_retiradas(
         if encontrado:
             if nome_sem_item:
                 problema(
-                    "Há dois técnicos sem itens entre eles. "
-                    "Separe as retiradas de cada um."
+                    "Separe as retiradas de cada técnico; "
+                    "há dois nomes sem itens entre eles."
                 )
 
             tecnico = encontrado
@@ -498,34 +489,33 @@ def organizar_retiradas(
             posicao += tamanho
             continue
 
-        # DIA DA SEMANA
-
         if palavra in DIAS:
             candidatas = [
                 inicio + timedelta(days=numero)
+
                 for numero in range(
                     (fim - inicio).days + 1
                 )
+
                 if (
                     inicio + timedelta(days=numero)
                 ).weekday() == DIAS[palavra]
             ]
 
-            if len(candidatas) != 1:
+            dia = (
+                candidatas[0]
+                if len(candidatas) == 1
+                else None
+            )
+
+            if dia is None:
                 problema(
-                    "Este dia da semana aparece mais de uma "
-                    "vez no período. Informe a data completa."
+                    "O dia da semana não identifica uma data "
+                    "única no período. Informe a data completa."
                 )
-
-                dia = None
-
-            else:
-                dia = candidatas[0]
 
             posicao += 1
             continue
-
-        # DATA COMPLETA
 
         if re.fullmatch(
             r"\d{4}-\d{2}-\d{2}"
@@ -534,26 +524,18 @@ def organizar_retiradas(
         ):
             try:
                 if "/" in palavra:
-                    pedacos = palavra.split("/")
-
-                    if len(pedacos) != 3:
-                        raise ValueError()
-
-                    novo_dia = date(
-                        int(pedacos[2]),
-                        int(pedacos[1]),
-                        int(pedacos[0]),
-                    )
+                    dia = datetime.strptime(
+                        palavra,
+                        "%d/%m/%Y",
+                    ).date()
 
                 else:
-                    novo_dia = date.fromisoformat(
+                    dia = date.fromisoformat(
                         palavra
                     )
 
-                if not inicio <= novo_dia <= fim:
+                if not inicio <= dia <= fim:
                     raise ValueError()
-
-                dia = novo_dia
 
             except ValueError:
                 dia = None
@@ -566,13 +548,9 @@ def organizar_retiradas(
             posicao += 1
             continue
 
-        # PALAVRAS DE LIGAÇÃO
-
         if palavra in LIGACOES:
             posicao += 1
             continue
-
-        # DEVOLUÇÕES EXIGEM VÍNCULO COM A RETIRADA ORIGINAL
 
         if palavra in {
             "devolveu",
@@ -581,14 +559,12 @@ def organizar_retiradas(
             "devolver",
         }:
             problema(
-                "Registre devoluções pelo formulário próprio, "
+                "Use o formulário de devolução, "
                 "vinculando a retirada original."
             )
 
             posicao += 1
             continue
-
-        # QUANTIDADE
 
         quantidade, tamanho = _quantidade(
             partes,
@@ -597,8 +573,8 @@ def organizar_retiradas(
 
         if quantidade is None:
             problema(
-                "Trecho não reconhecido. Especifique o técnico, "
-                "a quantidade e o nome do item."
+                "Trecho não reconhecido. Informe técnico, "
+                "quantidade e nome completo do item."
             )
 
             posicao += 1
@@ -625,8 +601,6 @@ def organizar_retiradas(
         ):
             posicao += 1
 
-        # ITEM DO CATÁLOGO
-
         item, tamanho_item = _encontrar(
             partes,
             posicao,
@@ -635,8 +609,8 @@ def organizar_retiradas(
 
         if not item:
             problema(
-                "Qual é o item desta quantidade? Use o nome "
-                "completo, como APC ou Cabo Miniflatdrop.",
+                "Qual é o item desta quantidade? "
+                "Use o nome completo do catálogo.",
                 comeco,
             )
 
@@ -644,7 +618,6 @@ def organizar_retiradas(
 
         posicao += tamanho_item
 
-        # Também aceita a unidade depois do nome do item.
         if (
             posicao < len(partes)
             and partes[posicao] in UNIDADES
@@ -664,20 +637,16 @@ def organizar_retiradas(
 
             posicao += 1
 
-        # VALIDAÇÃO DO TÉCNICO E DA DATA
-
         if not tecnico or not dia:
             problema(
                 "Falta técnico ou data. Informe no texto "
-                "ou selecione uma data padrão.",
+                "ou escolha uma data padrão.",
                 comeco,
             )
 
             continue
 
         nome_sem_item = False
-
-        # CONVERSÃO DAS EMBALAGENS CONHECIDAS
 
         if unidade and unidade != item["unit"]:
             fator = EMBALAGENS.get((
@@ -690,8 +659,8 @@ def organizar_retiradas(
                 or quantidade != quantidade.to_integral_value()
             ):
                 problema(
-                    "Embalagem incompatível ou fracionada. "
-                    "Informe a quantidade na unidade do catálogo.",
+                    "Embalagem incompatível. "
+                    "Use a unidade do catálogo.",
                     comeco,
                 )
 
@@ -699,70 +668,33 @@ def organizar_retiradas(
 
             quantidade *= fator
 
-        # LIMITES DAS QUANTIDADES
-
-        if (
-            quantidade <= 0
-            or quantidade > 1000000
-            or (
-                item["unit"] != "m"
-                and quantidade != quantidade.to_integral_value()
-            )
-        ):
-            problema(
-                "Quantidade inválida para este item.",
-                comeco,
-            )
-
-            continue
-
-        # CUSTO DO CATÁLOGO
-
         try:
-            custo = Decimal(
-                str(item["cost"])
+            linhas.append(
+                _linha(
+                    item,
+                    tecnico,
+                    dia,
+                    quantidade,
+                )
             )
-
-            if not custo.is_finite() or custo < 0:
-                raise InvalidOperation()
 
         except (
-            InvalidOperation,
             ValueError,
-        ):
+            InvalidOperation,
+        ) as erro:
             problema(
-                "O custo do item está inválido no catálogo.",
+                str(erro),
                 comeco,
             )
 
-            continue
-
-        linhas.append({
-            "date": dia.isoformat(),
-
-            "technician_id": tecnico["id"],
-            "technician": tecnico["name"],
-
-            "item_id": item["id"],
-            "item": item["name"],
-
-            "unit": item["unit"],
-            "category": item["category"],
-
-            "quantity": str(quantidade),
-            "cost": str(custo),
-
-            "kind": "retirada",
-        })
-
-        if len(linhas) > 500:
+        if len(linhas) > 1000:
             raise ValueError(
-                "Envie no máximo 500 itens por vez."
+                "Envie até 1.000 itens por vez."
             )
 
     if nome_sem_item:
         problema(
-            "O último técnico informado está sem itens."
+            "O último técnico está sem itens."
         )
 
     if not linhas and not pendencias:
@@ -770,27 +702,757 @@ def organizar_retiradas(
             "Nenhuma retirada encontrada."
         )
 
-    linhas.sort(
-        key=lambda linha: (
-            linha["date"],
-            linha["technician"],
-            linha["item"],
+    return _resultado(
+        linhas,
+        pendencias,
+        padrao,
+    )
+
+
+# ==========================================================
+# LIMPEZA DAS CÉLULAS DO SGP
+# Lê texto de HTML sem executar código.
+# ==========================================================
+
+class _TextoCelula(HTMLParser):
+    def __init__(self):
+        super().__init__(
+            convert_charrefs=True
+        )
+
+        self.partes = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {
+            "br",
+            "p",
+            "div",
+            "li",
+        }:
+            self.partes.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in {
+            "p",
+            "div",
+            "li",
+        }:
+            self.partes.append("\n")
+
+    def handle_data(self, data):
+        self.partes.append(data)
+
+
+def _celula(valor):
+    leitor = _TextoCelula()
+
+    leitor.feed(
+        unescape(valor).replace(
+            "\xa0",
+            " ",
         )
     )
 
-    return {
-        "rows": linhas,
+    return "".join(
+        leitor.partes
+    ).strip()
 
-        "issues": pendencias,
 
-        "can_confirm": (
-            bool(linhas)
-            and not pendencias
-        ),
+# ==========================================================
+# IDENTIFICAÇÃO DOS TÉCNICOS DO SGP
+# ==========================================================
 
-        "used_default_date": (
-            padrao.isoformat()
-            if padrao
-            else None
-        ),
-    }
+def _tecnico_sgp(destino, tecnicos):
+    nome = re.sub(
+        r"\btecnic[oa]\b",
+        "",
+        _chave(destino),
+    )
+
+    nome = " ".join(
+        nome.split()
+    )
+
+    encontrados = []
+
+    for tecnico in tecnicos:
+        chave = _chave(
+            tecnico["name"]
+        )
+
+        formas = [chave] + [
+            _chave(apelido)
+
+            for apelido in APELIDOS_TECNICOS.get(
+                normalizar(tecnico["name"]),
+                [],
+            )
+        ]
+
+        # Associações adicionais fornecidas pelo app.py.
+        formas += [
+            " ".join(
+                re.sub(
+                    r"\btecnic[oa]\b",
+                    "",
+                    _chave(apelido),
+                ).split()
+            )
+
+            for apelido in tecnico.get(
+                "sgp_aliases",
+                [],
+            )
+        ]
+
+        if nome in formas:
+            encontrados.append(tecnico)
+
+    return (
+        encontrados[0]
+        if len(encontrados) == 1
+        else None
+    )
+
+
+# ==========================================================
+# IDENTIFICAÇÃO DOS PRODUTOS DO SGP
+# ==========================================================
+
+def _item_sgp(descricao, itens):
+    nome = _chave(descricao)
+
+    candidatos = []
+
+    for item in itens:
+        chave = _chave(
+            item["name"]
+        )
+
+        achou = False
+
+        if chave in {
+            "apc",
+            "upc",
+        }:
+            achou = bool(
+                re.search(
+                    r"\b" + chave + r"\b",
+                    nome,
+                )
+                and "conector" in nome
+            )
+
+        elif chave == "miguelao":
+            achou = bool(
+                re.search(
+                    r"\bmiguelao\b",
+                    nome,
+                )
+            )
+
+        elif chave == "cunha":
+            achou = bool(
+                re.search(
+                    r"\bcunha\b",
+                    nome,
+                )
+            )
+
+        elif chave in {
+            "xc220",
+            "xx530",
+            "xx535",
+            "xx230",
+        }:
+            modelos = {
+                "xc220": r"xc\s*220(?:\s*g3v)?",
+                "xx530": r"xx\s*530",
+                "xx535": r"xx\s*535",
+                "xx230": r"xx\s*230v?",
+            }
+
+            achou = bool(
+                re.search(
+                    r"\b"
+                    + modelos[chave]
+                    + r"\b",
+                    nome,
+                )
+            )
+
+        else:
+            formas = [chave] + [
+                _chave(apelido)
+
+                for apelido in APELIDOS_ITENS.get(
+                    normalizar(item["name"]),
+                    [],
+                )
+            ]
+
+            achou = any(
+                re.search(
+                    r"\b"
+                    + re.escape(forma)
+                    + r"\b",
+                    nome,
+                )
+
+                for forma in formas
+            )
+
+        if achou:
+            candidatos.append(item)
+
+    # Mais de um produto possível também gera pendência.
+    return (
+        candidatos[0]
+        if len(candidatos) == 1
+        else None
+    )
+
+
+# ==========================================================
+# LEITURA DA TABELA
+# Aceita Markdown com "|" ou texto separado por tabulações.
+# ==========================================================
+
+def _linhas_tabela(texto):
+    if "|" in texto:
+        return [
+            linha.strip().strip("|").split("|")
+
+            for linha in texto.splitlines()
+
+            if "|" in linha
+        ]
+
+    return list(
+        csv.reader(
+            io.StringIO(texto),
+            delimiter="\t",
+        )
+    )
+
+
+# ==========================================================
+# ORGANIZAÇÃO DAS MOVIMENTAÇÕES DO SGP
+# ==========================================================
+
+def _organizar_sgp(
+    texto,
+    tecnicos,
+    itens,
+    inicio,
+    fim,
+):
+    linhas = []
+    pendencias = []
+    avisos = []
+    eventos = []
+
+    cabecalho = None
+
+    ids_vistos = {}
+
+    encontrou_registro = False
+
+    destinos_desconhecidos = set()
+
+    def problema(mensagem, trecho):
+        pendencias.append({
+            "message": mensagem,
+            "excerpt": trecho[:400],
+        })
+
+    for numero, celulas in enumerate(
+        _linhas_tabela(texto),
+        1,
+    ):
+        celulas = [
+            _celula(celula)
+            for celula in celulas
+        ]
+
+        chaves = [
+            _chave(celula)
+            for celula in celulas
+        ]
+
+        # Ignora linhas vazias e separadores do Markdown.
+        if not any(chaves):
+            continue
+
+        # Localiza as colunas pelo cabeçalho.
+        if "id" in chaves and "itens" in chaves:
+            exigidas = [
+                "id",
+                "data",
+                "local de origem",
+                "local de destino",
+                "status",
+                "itens",
+            ]
+
+            if not all(
+                coluna in chaves
+                for coluna in exigidas
+            ):
+                problema(
+                    "Faltam colunas obrigatórias "
+                    "no cabeçalho do SGP.",
+                    " | ".join(celulas),
+                )
+
+                continue
+
+            cabecalho = {
+                coluna: chaves.index(coluna)
+                for coluna in exigidas
+            }
+
+            continue
+
+        if cabecalho is None:
+            if any(
+                re.fullmatch(
+                    r"\d+",
+                    celula.strip(),
+                )
+
+                for celula in celulas
+            ):
+                problema(
+                    "Cole também o cabeçalho "
+                    "da tabela do SGP.",
+                    " | ".join(celulas),
+                )
+
+            continue
+
+        if max(cabecalho.values()) >= len(celulas):
+            problema(
+                "Linha incompleta na tabela.",
+                " | ".join(celulas),
+            )
+
+            continue
+
+        registro = {
+            coluna: celulas[posicao]
+            for coluna, posicao in cabecalho.items()
+        }
+
+        sgp_id = registro["id"].strip()
+
+        if not sgp_id.isdigit():
+            problema(
+                "ID de movimentação inválido.",
+                " | ".join(celulas),
+            )
+
+            continue
+
+        encontrou_registro = True
+
+        # DATA E HORÁRIO DO SGP
+
+        try:
+            momento = None
+
+            for formato in [
+                "%d/%m/%Y %H:%M:%S",
+                "%d/%m/%Y %H:%M",
+                "%d/%m/%Y",
+            ]:
+                try:
+                    momento = datetime.strptime(
+                        registro["data"],
+                        formato,
+                    )
+
+                    break
+
+                except ValueError:
+                    pass
+
+            if momento is None:
+                raise ValueError()
+
+        except ValueError:
+            problema(
+                "Data inválida na movimentação SGP "
+                + sgp_id
+                + ".",
+                registro["data"],
+            )
+
+            continue
+
+        dia = momento.date()
+
+        # FILTRO DO PERÍODO
+
+        if not inicio <= dia <= fim:
+            avisos.append(
+                "SGP "
+                + sgp_id
+                + " — "
+                + dia.strftime("%d/%m/%Y")
+                + ": fora do período; não será importada."
+            )
+
+            continue
+
+        # APENAS MOVIMENTAÇÕES APROVADAS
+
+        if _chave(registro["status"]) != "aprovada":
+            avisos.append(
+                "SGP "
+                + sgp_id
+                + ": status "
+                + registro["status"]
+                + "; não será importada."
+            )
+
+            continue
+
+        # APENAS SAÍDAS DO ALMOXARIFADO MATRIZ
+
+        if (
+            _chave(registro["local de origem"])
+            != "almoxarifado matriz"
+        ):
+            avisos.append(
+                "SGP "
+                + sgp_id
+                + ": a origem não é Almoxarifado Matriz; "
+                "não será importada."
+            )
+
+            continue
+
+        # IDENTIFICA O TÉCNICO
+
+        tecnico = _tecnico_sgp(
+            registro["local de destino"],
+            tecnicos,
+        )
+
+        if not tecnico:
+            destinos_desconhecidos.add(
+                registro["local de destino"]
+            )
+
+            problema(
+                "Destino ainda não associado a um técnico: "
+                + registro["local de destino"]
+                + ".",
+                "SGP " + sgp_id,
+            )
+
+            continue
+
+        retiradas = []
+        erros_antes = len(pendencias)
+
+        # CADA LINHA DA CÉLULA "ITENS"
+
+        for indice, parte in enumerate(
+            registro["itens"].splitlines(),
+            1,
+        ):
+            parte = " ".join(
+                parte.split()
+            )
+
+            if not parte:
+                continue
+
+            # São legendas de unidade, não produtos.
+            if re.fullmatch(
+                r"\((?:uni|un|pc|pcs|pç|m|mt|metros?|unidades?)\)",
+                normalizar(parte),
+            ):
+                continue
+
+            quantidade_final = re.fullmatch(
+                r"(.+?)\s+-\s+(-?\d+(?:[.,]\d{1,3})?)",
+                parte,
+            )
+
+            if not quantidade_final:
+                problema(
+                    "Não identifiquei a quantidade no final "
+                    "do item do SGP "
+                    + sgp_id
+                    + ".",
+                    parte,
+                )
+
+                continue
+
+            corpo, quantidade = (
+                quantidade_final.groups()
+            )
+
+            # O SGP utiliza valores como 1.0 e 100.0.
+            quantidade = Decimal(
+                quantidade.replace(",", ".")
+            )
+
+            segmentos = re.split(
+                r"\s+-\s+",
+                corpo,
+            )
+
+            serial = ""
+
+            if (
+                len(segmentos) > 1
+                and re.fullmatch(
+                    r"[A-Za-z0-9:_-]{6,120}",
+                    segmentos[-1],
+                )
+            ):
+                serial = segmentos.pop()
+
+            descricao = " - ".join(
+                segmentos
+            )
+
+            item = _item_sgp(
+                descricao,
+                itens,
+            )
+
+            if not item:
+                problema(
+                    "Item desconhecido ou ambíguo no SGP "
+                    + sgp_id
+                    + ". Não foi atribuído um preço.",
+                    descricao,
+                )
+
+                continue
+
+            try:
+                linha = _linha(
+                    item,
+                    tecnico,
+                    dia,
+                    quantidade,
+                )
+
+            except (
+                ValueError,
+                InvalidOperation,
+            ) as erro:
+                problema(
+                    str(erro)
+                    + " no SGP "
+                    + sgp_id
+                    + ".",
+                    parte,
+                )
+
+                continue
+
+            linha.update(
+                sgp_id=sgp_id,
+                sgp_line=indice,
+                sgp_serial=serial,
+                sgp_description=descricao,
+
+                sgp_datetime=momento.isoformat(
+                    timespec="seconds"
+                ),
+            )
+
+            retiradas.append(linha)
+
+        if (
+            not retiradas
+            and len(pendencias) == erros_antes
+        ):
+            problema(
+                "A movimentação SGP "
+                + sgp_id
+                + " está sem itens.",
+                registro["itens"],
+            )
+
+        # Não aproveita parcialmente uma movimentação com erros.
+        # A confirmação geral também será bloqueada.
+        if len(pendencias) != erros_antes:
+            continue
+
+        # ASSINATURA DO CONTEÚDO DE CADA ID
+
+        canonico = sorted(
+            (
+                linha["item_id"],
+
+                format(
+                    Decimal(
+                        linha["quantity"]
+                    ).normalize(),
+                    "f",
+                ),
+
+                linha["sgp_serial"],
+
+                _chave(
+                    linha["sgp_description"]
+                ),
+            )
+
+            for linha in retiradas
+        )
+
+        assinatura = hashlib.sha256(
+            json.dumps(
+                [
+                    momento.isoformat(),
+                    tecnico["id"],
+                    canonico,
+                ],
+
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+
+        # REPETIÇÃO DENTRO DA MESMA TABELA COLADA
+
+        if sgp_id in ids_vistos:
+            if ids_vistos[sgp_id] != assinatura:
+                problema(
+                    "O ID SGP "
+                    + sgp_id
+                    + " aparece com conteúdos diferentes. "
+                    "Confira a tabela.",
+                    sgp_id,
+                )
+
+            else:
+                avisos.append(
+                    "SGP "
+                    + sgp_id
+                    + ": repetida na tabela colada; "
+                    "considerada apenas uma vez."
+                )
+
+            continue
+
+        ids_vistos[sgp_id] = assinatura
+
+        linhas.extend(retiradas)
+
+        eventos.append({
+            "id": sgp_id,
+            "fingerprint": assinatura,
+            "date": dia.isoformat(),
+            "technician_id": tecnico["id"],
+
+            "datetime": momento.isoformat(
+                timespec="seconds"
+            ),
+        })
+
+        if len(linhas) > 1000:
+            raise ValueError(
+                "Cole até 1.000 itens por vez."
+            )
+
+    if not encontrou_registro:
+        problema(
+            "Nenhuma movimentação encontrada. "
+            "Cole o cabeçalho e as linhas da tabela do SGP.",
+            "",
+        )
+
+    resultado = _resultado(
+        linhas,
+        pendencias,
+        avisos=avisos,
+        eventos=eventos,
+        formato="sgp",
+    )
+
+    resultado["unknown_technicians"] = sorted(
+        destinos_desconhecidos
+    )
+
+    return resultado
+
+
+# ==========================================================
+# ENTRADA PRINCIPAL UTILIZADA PELO APP.PY
+# ==========================================================
+
+def organizar_retiradas(
+    texto,
+    tecnicos,
+    itens,
+    inicio,
+    fim,
+    data_padrao=None,
+    hoje=None,
+):
+    hoje = hoje or date.today()
+
+    inicio = date.fromisoformat(inicio)
+    fim = date.fromisoformat(fim)
+
+    if (
+        fim < inicio
+        or (fim - inicio).days > 366
+        or fim > hoje
+    ):
+        raise ValueError(
+            "Escolha um período válido de até 367 dias, "
+            "sem datas futuras."
+        )
+
+    if (
+        not isinstance(texto, str)
+        or not texto.strip()
+        or len(texto) > 200000
+    ):
+        raise ValueError(
+            "Cole ou escreva as retiradas "
+            "em até 200.000 caracteres."
+        )
+
+    # TABELA COPIADA DO SGP
+    if "|" in texto or "\t" in texto:
+        return _organizar_sgp(
+            texto,
+            tecnicos,
+            itens,
+            inicio,
+            fim,
+        )
+
+    # TEXTO DIGITADO MANUALMENTE
+    padrao = (
+        date.fromisoformat(data_padrao)
+        if data_padrao
+        else None
+    )
+
+    if padrao and not inicio <= padrao <= fim:
+        raise ValueError(
+            "A data padrão deve estar dentro do período."
+        )
+
+    return _organizar_texto(
+        texto,
+        tecnicos,
+        itens,
+        inicio,
+        fim,
+        padrao,
+    )
