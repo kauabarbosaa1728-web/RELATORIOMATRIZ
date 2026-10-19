@@ -2,7 +2,7 @@
 
 /* ==========================================
    ALMOXARIFADO MATRIZ
-   Dashboard e movimentações
+   Dashboard, movimentações e relatório por texto
    ========================================== */
 
 const $ = (selector) => document.querySelector(selector);
@@ -28,7 +28,7 @@ const state = {
 };
 
 
-/* ELEMENTOS */
+/* ELEMENTOS DA DASHBOARD */
 
 const elements = {
     start: $("#start"),
@@ -1048,11 +1048,10 @@ function openMovement() {
     changeKind();
 }
 
-// Permite o uso nos botões onclick do HTML.
 window.openMovement = openMovement;
 
 
-/* SALVAR MOVIMENTAÇÃO */
+/* SALVAR MOVIMENTAÇÃO MANUAL */
 
 elements.form.addEventListener(
     "submit",
@@ -1131,7 +1130,7 @@ elements.form.addEventListener(
 );
 
 
-/* EVENTOS */
+/* EVENTOS DA DASHBOARD */
 
 elements.kind.addEventListener(
     "change",
@@ -1202,7 +1201,6 @@ for (const input of [
     );
 }
 
-// Atualização periódica enquanto a página estiver visível.
 window.setInterval(() => {
     if (!document.hidden) {
         refreshDashboard();
@@ -1234,6 +1232,974 @@ window.addEventListener(
 );
 
 
-/* INICIALIZAÇÃO */
+/* INICIALIZAÇÃO DA DASHBOARD */
 
 selectPeriod("month");
+
+
+/* ==========================================
+   ASSISTENTE DE RETIRADAS POR TEXTO
+   ========================================== */
+
+(() => {
+    const root = $("#text-import");
+
+    if (!root) {
+        return;
+    }
+
+    const chat = {
+        form: $("#text-import-form"),
+        fields: $("#text-import-fields"),
+
+        period: $("#text-period"),
+
+        week: $("#text-week"),
+        weekLabel: $("#text-week-label"),
+
+        month: $("#text-month"),
+        monthLabel: $("#text-month-label"),
+
+        start: $("#text-start"),
+        end: $("#text-end"),
+
+        useDefault: $("#text-use-default"),
+        defaultLabel: $("#text-default-label"),
+        defaultDate: $("#text-default-date"),
+
+        source: $("#text-source"),
+
+        organize: $("#text-organize"),
+        example: $("#text-example"),
+
+        status: $("#text-status"),
+
+        preview: $("#text-preview"),
+        previewPeriod: $("#text-preview-period"),
+        previewTotal: $("#text-preview-total"),
+
+        warnings: $("#text-warnings"),
+
+        issuesBox: $("#text-issues-box"),
+        issues: $("#text-issues"),
+
+        technicians: $("#text-technician-totals"),
+        rows: $("#text-preview-rows"),
+
+        duplicateLabel: $("#text-duplicate-label"),
+        duplicateAck: $("#text-duplicate-ack"),
+
+        confirm: $("#text-confirm"),
+
+        result: $("#text-result"),
+        link: $("#text-report-link"),
+        open: $("#text-open"),
+        copy: $("#text-copy")
+    };
+
+    const csrf = $(
+        'meta[name="csrf-token"]'
+    ).content;
+
+    const currentDay = saoPauloToday();
+
+    let busy = false;
+    let token = null;
+    let confirmed = false;
+    let previewDates = null;
+
+
+    /* MENSAGENS */
+
+    function say(message, error = false) {
+        chat.status.textContent = message;
+
+        chat.status.classList.toggle(
+            "is-error",
+            error
+        );
+    }
+
+
+    /* DATAS DO ASSISTENTE */
+
+    function shiftDay(value, days) {
+        const day = new Date(
+            value + "T12:00:00Z"
+        );
+
+        day.setUTCDate(
+            day.getUTCDate() + days
+        );
+
+        return day.toISOString().slice(0, 10);
+    }
+
+    function monthBounds(value) {
+        const [year, month] = value.split("-").map(
+            Number
+        );
+
+        if (
+            !year ||
+            !month ||
+            month < 1 ||
+            month > 12
+        ) {
+            return null;
+        }
+
+        const next = new Date(
+            Date.UTC(
+                year,
+                month,
+                1,
+                12
+            )
+        );
+
+        next.setUTCDate(
+            next.getUTCDate() - 1
+        );
+
+        return [
+            value + "-01",
+            next.toISOString().slice(0, 10)
+        ];
+    }
+
+    const previousMonth = shiftDay(
+        currentDay.slice(0, 7) + "-01",
+        -1
+    ).slice(0, 7);
+
+    chat.month.value = previousMonth;
+    chat.month.max = previousMonth;
+
+    chat.week.value = currentDay;
+
+    [
+        chat.week,
+        chat.start,
+        chat.end,
+        chat.defaultDate
+    ].forEach((input) => {
+        input.max = currentDay;
+    });
+
+
+    /* CONTROLE DOS BOTÕES */
+
+    function updateConfirm() {
+        chat.confirm.disabled = (
+            busy ||
+            !token ||
+            confirmed ||
+            (
+                !chat.duplicateLabel.hidden &&
+                !chat.duplicateAck.checked
+            )
+        );
+    }
+
+    function setBusy(value, action = "") {
+        busy = value;
+
+        chat.fields.disabled = value;
+
+        root.setAttribute(
+            "aria-busy",
+            String(value)
+        );
+
+        chat.organize.textContent = (
+            value && action === "preview"
+        )
+            ? "Organizando…"
+            : "Organizar retiradas →";
+
+        chat.confirm.textContent = (
+            value && action === "confirm"
+        )
+            ? "Salvando e gerando link…"
+            : confirmed
+                ? "Retiradas já confirmadas ✓"
+                : "Conferi: salvar retiradas e gerar link →";
+
+        updateConfirm();
+    }
+
+
+    /* INVALIDAR PRÉVIA APÓS EDIÇÃO */
+
+    function invalidate() {
+        if (busy) {
+            return;
+        }
+
+        token = null;
+        confirmed = false;
+        previewDates = null;
+
+        chat.preview.hidden = true;
+        chat.result.hidden = true;
+
+        chat.link.value = "";
+
+        chat.open.removeAttribute("href");
+
+        chat.duplicateAck.checked = false;
+
+        chat.confirm.textContent =
+            "Conferi: salvar retiradas e gerar link →";
+
+        updateConfirm();
+
+        say(
+            "Texto ou período atualizado. " +
+            "Clique em Organizar retiradas para preparar a prévia."
+        );
+    }
+
+
+    /* DATA PADRÃO OPCIONAL */
+
+    function updateDefault() {
+        chat.defaultLabel.hidden = (
+            !chat.useDefault.checked
+        );
+
+        chat.defaultDate.disabled = (
+            !chat.useDefault.checked
+        );
+
+        chat.defaultDate.required = (
+            chat.useDefault.checked
+        );
+
+        chat.defaultDate.min = chat.start.value;
+
+        chat.defaultDate.max = (
+            chat.end.value ||
+            currentDay
+        );
+    }
+
+
+    /* SELEÇÃO DO PERÍODO */
+
+    function showPeriodControls() {
+        const isWeek = chat.period.value === "week";
+        const isMonth = chat.period.value === "month";
+
+        chat.weekLabel.hidden = !isWeek;
+        chat.monthLabel.hidden = !isMonth;
+
+        chat.week.disabled = !isWeek;
+        chat.month.disabled = !isMonth;
+
+        chat.week.required = isWeek;
+        chat.month.required = isMonth;
+    }
+
+    function applyPeriod() {
+        showPeriodControls();
+
+        if (
+            chat.period.value === "week" &&
+            chat.week.value
+        ) {
+            const day = new Date(
+                chat.week.value + "T12:00:00Z"
+            );
+
+            const monday = shiftDay(
+                chat.week.value,
+                -((day.getUTCDay() + 6) % 7)
+            );
+
+            chat.start.value = monday;
+
+            const friday = shiftDay(
+                monday,
+                4
+            );
+
+            chat.end.value = (
+                friday < currentDay
+                    ? friday
+                    : currentDay
+            );
+
+        } else if (chat.period.value === "last30") {
+            chat.start.value = shiftDay(
+                currentDay,
+                -29
+            );
+
+            chat.end.value = currentDay;
+
+        } else if (chat.period.value === "month") {
+            const bounds = monthBounds(
+                chat.month.value
+            );
+
+            if (bounds) {
+                [
+                    chat.start.value,
+                    chat.end.value
+                ] = bounds;
+            }
+        }
+
+        chat.end.min = chat.start.value;
+
+        updateDefault();
+        invalidate();
+    }
+
+
+    /* VALIDAÇÃO ANTES DO ENVIO */
+
+    function validDates() {
+        if (!chat.form.reportValidity()) {
+            return false;
+        }
+
+        const start = chat.start.value;
+        const end = chat.end.value;
+
+        if (
+            !start ||
+            !end ||
+            end < start ||
+            end > currentDay
+        ) {
+            say(
+                "Confira o período: a data final deve ser " +
+                "igual ou posterior à inicial e não pode estar no futuro.",
+                true
+            );
+
+            return false;
+        }
+
+        const days = (
+            Date.parse(end) - Date.parse(start)
+        ) / 86400000;
+
+        if (days > 366) {
+            say(
+                "Escolha um período de até 367 dias.",
+                true
+            );
+
+            return false;
+        }
+
+        if (
+            chat.useDefault.checked &&
+            (
+                !chat.defaultDate.value ||
+                chat.defaultDate.value < start ||
+                chat.defaultDate.value > end
+            )
+        ) {
+            say(
+                "Escolha uma data padrão dentro do período.",
+                true
+            );
+
+            return false;
+        }
+
+        return true;
+    }
+
+
+    /* ENVIO COM PROTEÇÃO CSRF */
+
+    async function post(url, payload) {
+        return api(
+            url,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-Token": csrf
+                },
+
+                body: JSON.stringify(payload)
+            }
+        );
+    }
+
+
+    /* APRESENTAR LINK */
+
+    function showReport(report) {
+        if (
+            !report ||
+            !report.active ||
+            !report.url
+        ) {
+            chat.result.hidden = true;
+
+            return false;
+        }
+
+        const url = new URL(
+            report.url,
+            window.location.href
+        );
+
+        if (
+            url.origin !== window.location.origin ||
+            !url.pathname.startsWith("/r/")
+        ) {
+            throw new Error(
+                "O endereço retornado não corresponde " +
+                "a um relatório deste sistema."
+            );
+        }
+
+        chat.link.value = url.href;
+        chat.open.href = url.href;
+
+        chat.result.hidden = false;
+
+        return true;
+    }
+
+
+    /* MONTAR PRÉVIA */
+
+    function renderPreview(data) {
+        if (
+            !Array.isArray(data.rows) ||
+            !Array.isArray(data.issues)
+        ) {
+            throw new Error(
+                "O servidor retornou uma prévia inválida. " +
+                "Atualize a página."
+            );
+        }
+
+        chat.preview.hidden = false;
+
+        chat.previewPeriod.textContent =
+            displayDate(data.start) +
+            " a " +
+            displayDate(data.end);
+
+        chat.previewTotal.textContent = money(
+            Number(data.total)
+        );
+
+        chat.rows.replaceChildren();
+        chat.technicians.replaceChildren();
+        chat.issues.replaceChildren();
+        chat.warnings.replaceChildren();
+
+        chat.duplicateAck.checked = false;
+
+        chat.duplicateLabel.hidden = (
+            !data.requires_duplicate_ack
+        );
+
+        chat.issuesBox.hidden = (
+            data.issues.length === 0
+        );
+
+        for (const row of data.rows) {
+            const tr = createNode("tr");
+
+            tr.append(
+                createNode(
+                    "td",
+                    displayDate(row.date)
+                ),
+                createNode(
+                    "td",
+                    row.technician
+                ),
+                createNode(
+                    "td",
+                    row.item
+                ),
+                createNode(
+                    "td",
+                    quantityText(
+                        Number(row.quantity)
+                    ) + " " + row.unit
+                ),
+                createNode(
+                    "td",
+                    money(Number(row.total))
+                )
+            );
+
+            chat.rows.append(tr);
+        }
+
+        if (!data.rows.length) {
+            const tr = createNode("tr");
+
+            const td = createNode(
+                "td",
+                "Nenhuma retirada reconhecida. " +
+                "Confira as pendências abaixo."
+            );
+
+            td.colSpan = 5;
+
+            tr.append(td);
+            chat.rows.append(tr);
+        }
+
+        for (
+            const [name, value]
+            of Object.entries(data.technicians || {})
+        ) {
+            chat.technicians.append(
+                createNode(
+                    "span",
+                    name + " · " + money(Number(value))
+                )
+            );
+        }
+
+        for (const issue of data.issues) {
+            const li = createNode("li");
+
+            li.append(
+                createNode(
+                    "span",
+                    issue.message
+                )
+            );
+
+            if (issue.excerpt) {
+                li.append(
+                    createNode("br"),
+
+                    createNode(
+                        "code",
+                        'Trecho: "' + issue.excerpt + '"'
+                    )
+                );
+            }
+
+            chat.issues.append(li);
+        }
+
+        const warnings = [
+            ...(data.warnings || [])
+        ];
+
+        if (data.used_default_date) {
+            warnings.push(
+                "A data " +
+                displayDate(data.used_default_date) +
+                " foi escolhida como padrão. " +
+                "Confira todas as datas na tabela."
+            );
+        }
+
+        chat.warnings.hidden = (
+            warnings.length === 0
+        );
+
+        warnings.forEach((message) => {
+            chat.warnings.append(
+                createNode(
+                    "li",
+                    message
+                )
+            );
+        });
+
+        token = (
+            data.can_confirm && data.token
+                ? data.token
+                : null
+        );
+
+        previewDates = {
+            start: data.start,
+            end: data.end
+        };
+
+        if (data.existing_report) {
+            const hasLink = showReport(
+                data.existing_report
+            );
+
+            say(
+                hasLink
+                    ? "Estas retiradas já foram importadas. " +
+                      "Separei o link do relatório existente. " +
+                      "Nada foi lançado novamente."
+                    : "Estas retiradas já foram importadas " +
+                      "e o link anterior está desativado. " +
+                      "Use Gerar link de relatório para criar outro fechamento."
+            );
+
+        } else if (token) {
+            say(
+                "Beleza! Organizei " +
+                data.rows.length +
+                " itens. Confira os técnicos, as datas, " +
+                "as quantidades e os valores antes de confirmar. " +
+                "Nada foi salvo ainda."
+            );
+
+        } else {
+            say(
+                "Encontrei pendências. Ajuste o texto " +
+                "e organize novamente. " +
+                "Nenhuma retirada foi salva.",
+                true
+            );
+        }
+    }
+
+
+    /* ORGANIZAR O TEXTO */
+
+    chat.form.addEventListener(
+        "submit",
+        async (event) => {
+            event.preventDefault();
+
+            if (busy || !validDates()) {
+                return;
+            }
+
+            if (!chat.source.value.trim()) {
+                say(
+                    "Escreva o que cada técnico retirou.",
+                    true
+                );
+
+                return;
+            }
+
+            invalidate();
+
+            const payload = {
+                text: chat.source.value,
+                start: chat.start.value,
+                end: chat.end.value,
+
+                default_date: (
+                    chat.useDefault.checked
+                        ? chat.defaultDate.value
+                        : null
+                )
+            };
+
+            setBusy(
+                true,
+                "preview"
+            );
+
+            say(
+                "Beleza, vou organizar as retiradas " +
+                "e calcular os valores. " +
+                "Já te mostro a prévia…"
+            );
+
+            try {
+                const data = await post(
+                    "/api/text-import/preview",
+                    payload
+                );
+
+                renderPreview(data);
+
+            } catch (error) {
+                token = null;
+
+                chat.preview.hidden = true;
+
+                say(
+                    error.message,
+                    true
+                );
+
+            } finally {
+                setBusy(false);
+            }
+        }
+    );
+
+
+    /* CONFIRMAR, SALVAR E GERAR RELATÓRIO */
+
+    chat.confirm.addEventListener(
+        "click",
+        async () => {
+            if (
+                busy ||
+                !token ||
+                confirmed
+            ) {
+                return;
+            }
+
+            if (
+                !chat.duplicateLabel.hidden &&
+                !chat.duplicateAck.checked
+            ) {
+                say(
+                    "Confira as possíveis duplicidades " +
+                    "e marque a confirmação.",
+                    true
+                );
+
+                return;
+            }
+
+            setBusy(
+                true,
+                "confirm"
+            );
+
+            say(
+                "Estou salvando as retiradas e preparando " +
+                "o relatório com todas as movimentações do período…"
+            );
+
+            try {
+                const report = await post(
+                    "/api/text-import/confirm",
+                    {
+                        token,
+                        confirm: true,
+                        ack_duplicates: chat.duplicateAck.checked
+                    }
+                );
+
+                // A gravação já foi concluída.
+                // Não libera nova confirmação se a exibição do link falhar.
+                confirmed = true;
+                token = null;
+
+                chat.preview.hidden = true;
+
+                const hasLink = showReport(report);
+
+                say(
+                    hasLink
+                        ? (
+                            report.reused
+                                ? "Esta importação já estava confirmada. " +
+                                  "Aqui está o mesmo relatório, " +
+                                  "sem duplicar as retiradas."
+                                : "Pronto! Retiradas salvas e relatório gerado. " +
+                                  "Agora é só copiar o link e mandar ao seu chefe."
+                        )
+                        : "A importação já foi confirmada, " +
+                          "mas o link está desativado. " +
+                          "Gere outro fechamento em Gerar link de relatório."
+                );
+
+                // Mostra na dashboard o período que acabou de ser importado.
+                if (previewDates) {
+                    elements.start.value = previewDates.start;
+                    elements.end.value = previewDates.end;
+
+                    document.querySelectorAll(
+                        "[data-period]"
+                    ).forEach((button) => {
+                        button.classList.remove(
+                            "selected"
+                        );
+
+                        button.setAttribute(
+                            "aria-pressed",
+                            "false"
+                        );
+                    });
+                }
+
+                refreshDashboard();
+
+                // Atualiza a lista de links já existente no HTML.
+                const reload = $("#share-reload");
+
+                if (reload && !reload.disabled) {
+                    reload.click();
+                }
+
+            } catch (error) {
+                say(
+                    error.message +
+                    (
+                        confirmed
+                            ? " A gravação foi concluída. " +
+                              "Confira a lista de relatórios gerados " +
+                              "para abrir o link."
+                            : " Se a conexão caiu, você pode tentar " +
+                              "Confirmar novamente: a mesma prévia " +
+                              "não é gravada duas vezes."
+                    ),
+                    true
+                );
+
+            } finally {
+                setBusy(false);
+            }
+        }
+    );
+
+
+    /* COPIAR O LINK */
+
+    chat.copy.addEventListener(
+        "click",
+        async () => {
+            if (!chat.link.value) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(
+                    chat.link.value
+                );
+
+                say(
+                    "Link copiado! Pode colar " +
+                    "na conversa com seu chefe."
+                );
+
+            } catch {
+                chat.link.focus();
+                chat.link.select();
+
+                chat.link.setSelectionRange(
+                    0,
+                    chat.link.value.length
+                );
+
+                say(
+                    "O link está selecionado. " +
+                    "Pressione Ctrl + C ou use Copiar no celular."
+                );
+            }
+        }
+    );
+
+
+    /* EVENTOS DO ASSISTENTE */
+
+    chat.period.addEventListener(
+        "change",
+        applyPeriod
+    );
+
+    chat.week.addEventListener(
+        "change",
+        applyPeriod
+    );
+
+    chat.month.addEventListener(
+        "change",
+        applyPeriod
+    );
+
+    [
+        chat.start,
+        chat.end
+    ].forEach((input) => {
+        input.addEventListener(
+            "change",
+            () => {
+                chat.period.value = "custom";
+
+                showPeriodControls();
+
+                chat.end.min = chat.start.value;
+
+                updateDefault();
+                invalidate();
+            }
+        );
+    });
+
+    chat.useDefault.addEventListener(
+        "change",
+        () => {
+            updateDefault();
+            invalidate();
+        }
+    );
+
+    chat.source.addEventListener(
+        "input",
+        invalidate
+    );
+
+    chat.defaultDate.addEventListener(
+        "input",
+        invalidate
+    );
+
+    chat.duplicateAck.addEventListener(
+        "change",
+        updateConfirm
+    );
+
+
+    /* EXEMPLO */
+
+    chat.example.addEventListener(
+        "click",
+        () => {
+            if (busy) {
+                return;
+            }
+
+            if (chat.source.value.trim()) {
+                say(
+                    "O campo já tem um texto. " +
+                    "Apague-o primeiro se quiser preencher o exemplo."
+                );
+
+                return;
+            }
+
+            if (!chat.start.value) {
+                applyPeriod();
+            }
+
+            chat.source.value =
+                displayDate(chat.start.value) + "\n" +
+                "Rogério pegou 3 APC e 4 cunhas.\n" +
+                "Magno retirou 1 XC220.\n" +
+                "Wildiney pegou 100 metros de cabo miniflatdrop.";
+
+            invalidate();
+
+            say(
+                "Exemplo preenchido. Troque pelos dados reais " +
+                "antes de confirmar: confirmar este exemplo " +
+                "gravaria essas retiradas."
+            );
+
+            chat.source.focus();
+        }
+    );
+
+
+    /* INICIALIZAÇÃO DO ASSISTENTE */
+
+    applyPeriod();
+
+    say(
+        "Olá! Me conte o que cada técnico retirou. " +
+        "Vou preparar uma prévia para você conferir."
+    );
+})();
