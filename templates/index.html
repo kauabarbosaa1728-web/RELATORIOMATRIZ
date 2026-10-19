@@ -1,23 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <meta
         name="description"
         content="Controle de materiais, equipamentos e relatórios de gastos do Almoxarifado Matriz."
     >
 
-    <meta
-        name="csrf-token"
-        content="{{ session.csrf }}"
-    >
+    <meta name="csrf-token" content="{{ session.csrf }}">
 
     <title>Relatório de Gastos Almoxarifado Matriz</title>
 
@@ -27,16 +19,16 @@
     >
 
     <style>
+        [hidden] {
+            display: none !important;
+        }
+
         /* RELATÓRIOS COMPARTILHADOS */
 
         #shared-reports {
             margin-bottom: 24px;
             scroll-margin-top: 20px;
             border-color: #57734d;
-        }
-
-        [hidden] {
-            display: none !important;
         }
 
         .share-intro {
@@ -61,12 +53,7 @@
             padding: 21px;
             border: 1px solid #3b5546;
             border-radius: 12px;
-            background:
-                linear-gradient(
-                    140deg,
-                    #213b2d66,
-                    #101b17
-                );
+            background: linear-gradient(140deg, #213b2d66, #101b17);
         }
 
         .share-option h4 {
@@ -265,7 +252,8 @@
             width: min(100%, 260px);
         }
 
-        #text-source {
+        #text-source,
+        #sgp-tabela-atual {
             display: block;
             width: 100%;
             min-height: 190px;
@@ -279,13 +267,46 @@
             color-scheme: dark;
         }
 
-        #text-source::placeholder {
+        #text-source::placeholder,
+        #sgp-tabela-atual::placeholder {
             color: #77968a;
         }
 
-        #text-source:focus {
+        #text-source:focus,
+        #sgp-tabela-atual:focus {
             outline: 2px solid #40dfae77;
             outline-offset: 2px;
+        }
+
+        #sgp-lote {
+            margin-top: 20px;
+        }
+
+        #sgp-lote .saved-report {
+            align-items: flex-start;
+            border-color: #3b6650;
+            background: #15302366;
+        }
+
+        #sgp-lote details {
+            flex: 1 1 250px;
+            min-width: 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        #sgp-lote summary {
+            cursor: pointer;
+            color: var(--green);
+        }
+
+        #sgp-lote pre {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #354d40;
+            border-radius: 8px;
+            background: #0d1915;
+            color: var(--text);
         }
 
         .text-import-check {
@@ -457,7 +478,8 @@
             }
 
             .text-import-actions button,
-            .text-import-confirm {
+            .text-import-confirm,
+            #sgp-lote > button {
                 width: 100%;
             }
 
@@ -469,11 +491,9 @@
 </head>
 
 <body>
-
     <!-- MENU LATERAL -->
 
     <aside>
-
         <div class="logo">
             <div class="brand-icon" aria-hidden="true">M</div>
 
@@ -486,7 +506,6 @@
         <p class="eyebrow">WORKSPACE / 01</p>
 
         <nav aria-label="Menu principal">
-
             <a class="active" href="#overview">
                 ◈ Visão geral
             </a>
@@ -496,7 +515,7 @@
             </button>
 
             <a href="#text-import">
-                ✎ Relatório por texto
+                ✎ Importar tabelas do SGP
             </a>
 
             <a href="#shared-reports">
@@ -510,11 +529,9 @@
             <a href="#catalog">
                 ▦ Catálogo de custos
             </a>
-
         </nav>
 
         <div class="aside-bottom">
-
             <span class="dot" aria-hidden="true"></span>
             Controle de materiais
 
@@ -524,7 +541,6 @@
             </p>
 
             <form action="{{ url_for('logout') }}" method="POST">
-
                 <input
                     type="hidden"
                     name="csrf"
@@ -534,19 +550,14 @@
                 <button type="submit">
                     Sair da conta ↗
                 </button>
-
             </form>
-
         </div>
-
     </aside>
 
     <!-- CONTEÚDO PRINCIPAL -->
 
     <main id="overview">
-
         <header>
-
             <div>
                 <p class="eyebrow">
                     INTELIGÊNCIA DE MATERIAIS / MATRIZ
@@ -567,18 +578,12 @@
                 <span class="dot" aria-hidden="true"></span>
                 <span id="sync">Conectando</span>
             </div>
-
         </header>
 
         <!-- FILTROS -->
 
-        <section
-            class="toolbar panel"
-            aria-label="Filtros do relatório"
-        >
-
+        <section class="toolbar panel" aria-label="Filtros do relatório">
             <div class="period-tabs">
-
                 <button type="button" data-period="week">
                     Esta semana
                 </button>
@@ -590,11 +595,9 @@
                 >
                     Este mês
                 </button>
-
             </div>
 
             <div class="date-range">
-
                 <label for="start">
                     De
                     <input id="start" type="date" required>
@@ -608,7 +611,6 @@
                 <button type="button" id="apply">
                     Aplicar
                 </button>
-
             </div>
 
             <button
@@ -620,21 +622,14 @@
             </button>
 
             <!-- tela.js acrescenta Limpar tela e Mostrar dados -->
-
         </section>
 
-        <div
-            id="message"
-            role="status"
-            aria-live="polite"
-        ></div>
+        <div id="message" role="status" aria-live="polite"></div>
 
         <!-- INDICADORES -->
 
         <section class="kpis" aria-label="Indicadores de gastos">
-
             <article class="kpi featured">
-
                 <p>
                     CUSTO LÍQUIDO
                     <span aria-hidden="true">↗</span>
@@ -643,11 +638,9 @@
                 <h2 id="total">R$ 0,00</h2>
 
                 <small>Retiradas menos devoluções</small>
-
             </article>
 
             <article class="kpi">
-
                 <p>
                     MATERIAIS
                     <span aria-hidden="true">▦</span>
@@ -656,11 +649,9 @@
                 <h2 id="materials">R$ 0,00</h2>
 
                 <small>Cabos, conectores e insumos</small>
-
             </article>
 
             <article class="kpi">
-
                 <p>
                     EQUIPAMENTOS
                     <span aria-hidden="true">▣</span>
@@ -669,11 +660,9 @@
                 <h2 id="equipment">R$ 0,00</h2>
 
                 <small>Roteadores, ONUs e dispositivos</small>
-
             </article>
 
             <article class="kpi">
-
                 <p>
                     REDUÇÃO DE GASTO
                     <span aria-hidden="true">↘</span>
@@ -684,9 +673,7 @@
                 <small id="comparison">
                     Sem base anterior
                 </small>
-
             </article>
-
         </section>
 
         <!-- EVOLUÇÃO E COMPOSIÇÃO -->
@@ -695,53 +682,39 @@
             class="chart-grid"
             aria-label="Evolução e composição dos gastos"
         >
-
             <article class="panel chart-panel">
-
                 <div class="section-head">
-
                     <div>
-                        <p class="eyebrow">
-                            MOVIMENTO DO PERÍODO
-                        </p>
-
+                        <p class="eyebrow">MOVIMENTO DO PERÍODO</p>
                         <h3>Evolução dos custos</h3>
                     </div>
 
                     <span class="chip">Líquido diário</span>
-
                 </div>
 
                 <div id="timeline" class="timeline"></div>
 
                 <div class="chart-foot">
-
                     <span>
                         <i class="dot" aria-hidden="true"></i>
                         Custos líquidos em reais
                     </span>
 
                     <span id="count">0 movimentações</span>
-
                 </div>
-
             </article>
 
             <article class="panel">
-
                 <div class="section-head">
-
                     <div>
                         <p class="eyebrow">DISTRIBUIÇÃO</p>
                         <h3>Composição dos gastos</h3>
                     </div>
 
                     <span aria-hidden="true">◉</span>
-
                 </div>
 
                 <div class="donut" id="donut">
-
                     <div>
                         <small>VALOR LÍQUIDO</small>
 
@@ -749,11 +722,9 @@
                             R$ 0,00
                         </strong>
                     </div>
-
                 </div>
 
                 <div class="legend">
-
                     <span>
                         <i class="dot" aria-hidden="true"></i>
                         Materiais
@@ -761,19 +732,12 @@
                     </span>
 
                     <span>
-                        <i
-                            class="dot gold-bg"
-                            aria-hidden="true"
-                        ></i>
-
+                        <i class="dot gold-bg" aria-hidden="true"></i>
                         Equipamentos
                         <b id="eq-share">—</b>
                     </span>
-
                 </div>
-
             </article>
-
         </section>
 
         <!-- CUSTOS POR TÉCNICO E ITEM -->
@@ -782,11 +746,8 @@
             class="chart-grid equal"
             aria-label="Custos por técnico e item"
         >
-
             <article class="panel">
-
                 <div class="section-head">
-
                     <div>
                         <p class="eyebrow">
                             EQUIPE / {{ technicians | length }} TÉCNICOS
@@ -796,33 +757,24 @@
                     </div>
 
                     <span class="chip">Valor líquido</span>
-
                 </div>
 
                 <div id="technician-bars" class="bars"></div>
-
             </article>
 
             <article class="panel">
-
                 <div class="section-head">
-
                     <div>
-                        <p class="eyebrow">
-                            ONDE ESTÁ O CUSTO
-                        </p>
-
+                        <p class="eyebrow">ONDE ESTÁ O CUSTO</p>
                         <h3>Itens de maior impacto</h3>
                     </div>
 
                     <span class="chip">Top 8</span>
-
                 </div>
 
                 <div id="item-bars" class="bars"></div>
 
                 <div class="insight">
-
                     <span aria-hidden="true">↩</span>
 
                     <div>
@@ -835,11 +787,8 @@
                             e mantêm vínculo com a retirada original.
                         </p>
                     </div>
-
                 </div>
-
             </article>
-
         </section>
 
         <!-- ASSISTENTE DE RETIRADAS -->
@@ -849,50 +798,41 @@
             class="panel"
             aria-labelledby="text-import-title"
         >
-
             <div class="section-head">
-
                 <div>
-                    <p class="eyebrow">
-                        ASSISTENTE DE RELATÓRIOS
-                    </p>
+                    <p class="eyebrow">ASSISTENTE DE RELATÓRIOS</p>
 
                     <h3 id="text-import-title">
-                        Cole as retiradas. Confira. Gere o link.
+                        Todos os técnicos. Um único relatório.
                     </h3>
                 </div>
 
                 <span class="chip">
-                    Organização por técnico
+                    {{ technicians | length }} técnicos
                 </span>
-
             </div>
 
             <p class="share-intro">
-                Cole as movimentações do SGP de um ou vários técnicos.
-                O assistente identifica os itens novos e calcula os
-                custos do catálogo. Nada é lançado até você conferir
-                e confirmar.
+                Cole a tabela de cada técnico e adicione à lista.
+                Depois de juntar as tabelas, organize tudo, confira
+                as retiradas e confirme para gerar um único link.
+                Nada é lançado antes da sua confirmação.
             </p>
 
             <form id="text-import-form">
-
                 <fieldset
                     id="text-import-fields"
                     class="text-import-fields"
                 >
-
                     <legend class="text-import-legend">
                         Período e retiradas
                     </legend>
 
                     <div class="text-import-grid">
-
                         <label for="text-period">
                             Período
 
                             <select id="text-period">
-
                                 <option value="week">
                                     Segunda a sexta
                                 </option>
@@ -908,14 +848,10 @@
                                 <option value="custom">
                                     Escolher datas
                                 </option>
-
                             </select>
                         </label>
 
-                        <label
-                            for="text-week"
-                            id="text-week-label"
-                        >
+                        <label for="text-week" id="text-week-label">
                             Data da semana
 
                             <input
@@ -933,10 +869,7 @@
                         >
                             Mês encerrado
 
-                            <input
-                                id="text-month"
-                                type="month"
-                            >
+                            <input id="text-month" type="month">
                         </label>
 
                         <label for="text-start">
@@ -960,7 +893,6 @@
                                 required
                             >
                         </label>
-
                     </div>
 
                     <label
@@ -1012,10 +944,7 @@
                         placeholder="Cole aqui a tabela completa do SGP, incluindo o cabeçalho."
                     ></textarea>
 
-                    <p
-                        id="text-help"
-                        class="footnote muted"
-                    >
+                    <p id="text-help" class="footnote muted">
                         Cole as colunas ID, Data, Local de Origem,
                         Local de Destino, Status e Itens.
                         Devoluções continuam no formulário de movimentação,
@@ -1023,28 +952,21 @@
                     </p>
 
                     <div class="actions text-import-actions">
-
                         <button
                             id="text-organize"
                             class="primary"
                             type="submit"
                         >
-                            Organizar retiradas →
+                            Organizar todas as tabelas →
                         </button>
 
-                        <button
-                            id="text-example"
-                            type="button"
-                        >
+                        <button id="text-example" type="button">
                             Exemplo de texto manual
                         </button>
 
                         <!-- tela.js acrescenta Limpar / começar outro -->
-
                     </div>
-
                 </fieldset>
-
             </form>
 
             <div
@@ -1053,33 +975,24 @@
                 role="status"
                 aria-live="polite"
             >
-                Olá! Cole a tabela do SGP de um ou vários técnicos.
-                Vou preparar uma prévia para você conferir.
+                Adicione as tabelas dos técnicos para preparar o relatório.
             </div>
 
             <!-- PRÉVIA -->
 
             <div id="text-preview" hidden>
-
                 <div class="text-import-preview-head">
-
                     <div>
                         <p class="eyebrow">
                             PRÉVIA — SOMENTE RETIRADAS NOVAS
                         </p>
 
-                        <h4>
-                            Confira as retiradas organizadas
-                        </h4>
+                        <h4>Confira as retiradas organizadas</h4>
 
-                        <p
-                            id="text-preview-period"
-                            class="muted"
-                        ></p>
+                        <p id="text-preview-period" class="muted"></p>
                     </div>
 
                     <div class="text-import-total">
-
                         <small>
                             Total das novas retiradas reconhecidas
                         </small>
@@ -1087,9 +1000,7 @@
                         <strong id="text-preview-total">
                             R$ 0,00
                         </strong>
-
                     </div>
-
                 </div>
 
                 <ul
@@ -1103,18 +1014,14 @@
                     class="text-import-issues"
                     hidden
                 >
-                    <h4>
-                        Preciso que você confira estes trechos
-                    </h4>
+                    <h4>Preciso que você confira estes trechos</h4>
 
                     <ul id="text-issues"></ul>
 
                     <p>
-                        Corrija as pendências e clique em
-                        Organizar retiradas novamente.
-                        Nenhum item foi salvo.
+                        Corrija as pendências e organize novamente.
+                        Nenhum item desta prévia foi salvo.
                     </p>
-
                 </div>
 
                 <div
@@ -1123,9 +1030,7 @@
                 ></div>
 
                 <div class="table-wrap">
-
                     <table>
-
                         <thead>
                             <tr>
                                 <th scope="col">Data</th>
@@ -1137,9 +1042,7 @@
                         </thead>
 
                         <tbody id="text-preview-rows"></tbody>
-
                     </table>
-
                 </div>
 
                 <label
@@ -1148,10 +1051,7 @@
                     for="text-duplicate-ack"
                     hidden
                 >
-                    <input
-                        id="text-duplicate-ack"
-                        type="checkbox"
-                    >
+                    <input id="text-duplicate-ack" type="checkbox">
 
                     <span>
                         Conferi o histórico: os itens indicados
@@ -1174,23 +1074,16 @@
                 >
                     Conferi: salvar retiradas e gerar link →
                 </button>
-
             </div>
 
             <!-- RESULTADO -->
 
-            <div
-                id="text-result"
-                class="share-result"
-                hidden
-            >
-
+            <div id="text-result" class="share-result" hidden>
                 <label for="text-report-link">
                     Seu relatório está pronto
                 </label>
 
                 <div class="share-link-row">
-
                     <input
                         id="text-report-link"
                         type="url"
@@ -1215,15 +1108,12 @@
                     >
                         Abrir relatório ↗
                     </a>
-
                 </div>
 
                 <p class="footnote muted">
                     Você pode copiar o link e enviar ao seu chefe.
                 </p>
-
             </div>
-
         </section>
 
         <!-- GERAR LINKS -->
@@ -1233,23 +1123,13 @@
             class="panel"
             aria-labelledby="shared-title"
         >
-
             <div class="section-head">
-
                 <div>
-                    <p class="eyebrow">
-                        FECHAMENTO E COMPARTILHAMENTO
-                    </p>
-
-                    <h3 id="shared-title">
-                        Gerar link de relatório
-                    </h3>
+                    <p class="eyebrow">FECHAMENTO E COMPARTILHAMENTO</p>
+                    <h3 id="shared-title">Gerar link de relatório</h3>
                 </div>
 
-                <span class="chip">
-                    Todos os técnicos
-                </span>
-
+                <span class="chip">Todos os técnicos</span>
             </div>
 
             <p class="share-intro">
@@ -1260,17 +1140,10 @@
             </p>
 
             <div class="share-options">
-
                 <!-- SEMANAL -->
 
-                <form
-                    class="share-option"
-                    data-report-mode="week"
-                >
-
-                    <span class="share-number" aria-hidden="true">
-                        01
-                    </span>
+                <form class="share-option" data-report-mode="week">
+                    <span class="share-number" aria-hidden="true">01</span>
 
                     <h4>Segunda a sexta</h4>
 
@@ -1298,19 +1171,12 @@
                     >
                         Gerar link semanal
                     </button>
-
                 </form>
 
                 <!-- ÚLTIMOS 30 DIAS -->
 
-                <form
-                    class="share-option"
-                    data-report-mode="last30"
-                >
-
-                    <span class="share-number" aria-hidden="true">
-                        02
-                    </span>
+                <form class="share-option" data-report-mode="last30">
+                    <span class="share-number" aria-hidden="true">02</span>
 
                     <h4>Últimos 30 dias</h4>
 
@@ -1331,19 +1197,12 @@
                     >
                         Gerar link de 30 dias
                     </button>
-
                 </form>
 
                 <!-- MÊS FECHADO -->
 
-                <form
-                    class="share-option"
-                    data-report-mode="month"
-                >
-
-                    <span class="share-number" aria-hidden="true">
-                        03
-                    </span>
+                <form class="share-option" data-report-mode="month">
+                    <span class="share-number" aria-hidden="true">03</span>
 
                     <h4>Mês fechado</h4>
 
@@ -1355,11 +1214,7 @@
                     <label for="share-month">
                         Mês do relatório
 
-                        <input
-                            id="share-month"
-                            type="month"
-                            required
-                        >
+                        <input id="share-month" type="month" required>
                     </label>
 
                     <button
@@ -1369,9 +1224,7 @@
                     >
                         Gerar link mensal
                     </button>
-
                 </form>
-
             </div>
 
             <p class="footnote muted">
@@ -1381,24 +1234,12 @@
                 e baixar seu PDF sem entrar na sua conta.
             </p>
 
-            <p
-                id="share-status"
-                role="status"
-                aria-live="polite"
-            ></p>
+            <p id="share-status" role="status" aria-live="polite"></p>
 
-            <div
-                id="share-result"
-                class="share-result"
-                hidden
-            >
-
-                <label for="share-link">
-                    Link do relatório
-                </label>
+            <div id="share-result" class="share-result" hidden>
+                <label for="share-link">Link do relatório</label>
 
                 <div class="share-link-row">
-
                     <input
                         id="share-link"
                         type="url"
@@ -1423,32 +1264,23 @@
                     >
                         Abrir relatório ↗
                     </a>
-
                 </div>
-
             </div>
 
             <!-- LISTA DE RELATÓRIOS -->
 
             <div class="share-history-heading">
-
                 <h4>Relatórios gerados</h4>
 
-                <button
-                    type="button"
-                    id="share-reload"
-                >
+                <button type="button" id="share-reload">
                     ↻ Atualizar lista
                 </button>
 
                 <!-- tela.js acrescenta Restaurar relatórios ocultos -->
-
             </div>
 
             <div id="share-list">
-                <p class="muted">
-                    Carregando relatórios…
-                </p>
+                <p class="muted">Carregando relatórios…</p>
             </div>
 
             <p class="footnote muted">
@@ -1456,22 +1288,18 @@
                 Desativar um link bloqueia novas consultas à página e ao PDF.
                 Arquivos já baixados continuam com quem os recebeu.
             </p>
-
         </section>
 
         <!-- HISTÓRICO -->
 
         <section id="history" class="panel">
-
             <div class="section-head">
-
                 <div>
                     <p class="eyebrow">RASTREABILIDADE</p>
                     <h3>Movimentações do período</h3>
                 </div>
 
                 <div class="actions">
-
                     <a
                         id="csv"
                         class="button"
@@ -1487,15 +1315,11 @@
                     >
                         ↓ Relatório PDF
                     </a>
-
                 </div>
-
             </div>
 
             <div class="table-wrap">
-
                 <table>
-
                     <thead>
                         <tr>
                             <th scope="col">Data</th>
@@ -1508,9 +1332,7 @@
                     </thead>
 
                     <tbody id="rows"></tbody>
-
                 </table>
-
             </div>
 
             <p class="muted footnote">
@@ -1518,15 +1340,12 @@
                 de igual duração. Redução de gasto não comprova
                 menor desperdício. Retirada não confirma consumo final.
             </p>
-
         </section>
 
         <!-- CATÁLOGO -->
 
         <section id="catalog" class="panel">
-
             <div class="section-head">
-
                 <div>
                     <p class="eyebrow">BASE DE CÁLCULO</p>
                     <h3>Catálogo de custos</h3>
@@ -1535,13 +1354,10 @@
                 <span class="chip">
                     {{ items | length }} itens cadastrados
                 </span>
-
             </div>
 
             <div class="table-wrap">
-
                 <table>
-
                     <thead>
                         <tr>
                             <th scope="col">Item</th>
@@ -1552,10 +1368,8 @@
                     </thead>
 
                     <tbody>
-
                         {% for item in items %}
                             <tr>
-
                                 <td>{{ item.name }}</td>
 
                                 <td>
@@ -1575,14 +1389,10 @@
                                         R$ {{ ('%.6f' | format(item.cost)).rstrip('0').rstrip('.').replace('.', ',') }}
                                     {% endif %}
                                 </td>
-
                             </tr>
                         {% endfor %}
-
                     </tbody>
-
                 </table>
-
             </div>
 
             <p class="footnote muted">
@@ -1592,20 +1402,14 @@
                 Miniflatdrop: R$ 390,90 / 1.000 m.
                 Fita isolante considerada por rolo.
             </p>
-
         </section>
 
         <footer>
-
             MATRIZ
             <span>/</span>
             Relatórios que transformam registros em decisões.
 
-            <form
-                action="{{ url_for('logout') }}"
-                method="POST"
-            >
-
+            <form action="{{ url_for('logout') }}" method="POST">
                 <input
                     type="hidden"
                     name="csrf"
@@ -1615,30 +1419,18 @@
                 <button type="submit">
                     Sair da conta ↗
                 </button>
-
             </form>
-
         </footer>
-
     </main>
 
     <!-- JANELA DE MOVIMENTAÇÃO -->
 
-    <dialog
-        id="movement-dialog"
-        aria-labelledby="movement-title"
-    >
-
+    <dialog id="movement-dialog" aria-labelledby="movement-title">
         <form id="movement-form">
-
             <div class="section-head">
-
                 <div>
                     <p class="eyebrow">NOVO REGISTRO</p>
-
-                    <h3 id="movement-title">
-                        Movimentação
-                    </h3>
+                    <h3 id="movement-title">Movimentação</h3>
                 </div>
 
                 <button
@@ -1648,22 +1440,14 @@
                 >
                     ✕
                 </button>
-
             </div>
 
             <label for="kind">
                 Tipo
 
                 <select id="kind" name="kind">
-
-                    <option value="retirada">
-                        Retirada
-                    </option>
-
-                    <option value="devolucao">
-                        Devolução sem uso
-                    </option>
-
+                    <option value="retirada">Retirada</option>
+                    <option value="devolucao">Devolução sem uso</option>
                 </select>
             </label>
 
@@ -1681,7 +1465,6 @@
             </label>
 
             <div id="withdraw-fields">
-
                 <label for="technician-select">
                     Técnico
 
@@ -1700,10 +1483,7 @@
                 <label for="item-select">
                     Item
 
-                    <select
-                        name="item_id"
-                        id="item-select"
-                    >
+                    <select name="item_id" id="item-select">
                         {% for item in items %}
                             <option
                                 value="{{ item.id }}"
@@ -1715,20 +1495,12 @@
                         {% endfor %}
                     </select>
                 </label>
-
             </div>
 
-            <label
-                id="return-fields"
-                for="original"
-                hidden
-            >
+            <label id="return-fields" for="original" hidden>
                 Retirada original
 
-                <select
-                    name="original_id"
-                    id="original"
-                ></select>
+                <select name="original_id" id="original"></select>
             </label>
 
             <label for="quantity">
@@ -1759,28 +1531,25 @@
                 >
             </label>
 
-            <p
-                id="form-error"
-                role="alert"
-                aria-live="polite"
-            ></p>
+            <p id="form-error" role="alert" aria-live="polite"></p>
 
-            <button
-                type="submit"
-                class="primary"
-                id="save"
-            >
+            <button type="submit" class="primary" id="save">
                 Salvar movimentação →
             </button>
-
         </form>
-
     </dialog>
 
     <!-- DASHBOARD E IMPORTAÇÃO DO SGP -->
 
     <script
         src="{{ url_for('static', filename='app.js') }}"
+        defer
+    ></script>
+
+    <!-- JUNTA AS TABELAS ANTES DE ORGANIZAR -->
+
+    <script
+        src="{{ url_for('static', filename='lote.js') }}"
         defer
     ></script>
 
@@ -1801,55 +1570,32 @@
         (() => {
             "use strict";
 
-            const root = document.getElementById(
-                "shared-reports"
-            );
+            const root = document.getElementById("shared-reports");
 
             if (!root) {
                 return;
             }
 
-            const status = document.getElementById(
-                "share-status"
-            );
-
-            const result = document.getElementById(
-                "share-result"
-            );
-
-            const link = document.getElementById(
-                "share-link"
-            );
-
-            const open = document.getElementById(
-                "share-open"
-            );
-
-            const list = document.getElementById(
-                "share-list"
-            );
+            const status = document.getElementById("share-status");
+            const result = document.getElementById("share-result");
+            const link = document.getElementById("share-link");
+            const open = document.getElementById("share-open");
+            const list = document.getElementById("share-list");
 
             const csrf = document.querySelector(
                 'meta[name="csrf-token"]'
             ).content;
 
-            const currency = new Intl.NumberFormat(
-                "pt-BR",
-                {
-                    style: "currency",
-                    currency: "BRL"
-                }
-            );
+            const currency = new Intl.NumberFormat("pt-BR", {
+                style: "currency",
+                currency: "BRL"
+            });
 
             let generating = false;
 
             function say(message, error = false) {
                 status.textContent = message;
-
-                status.classList.toggle(
-                    "share-error",
-                    error
-                );
+                status.classList.toggle("share-error", error);
             }
 
             function make(tag, text, className) {
@@ -1879,14 +1625,11 @@
                 );
 
                 try {
-                    const response = await fetch(
-                        url,
-                        {
-                            ...options,
-                            credentials: "same-origin",
-                            signal: controller.signal
-                        }
-                    );
+                    const response = await fetch(url, {
+                        ...options,
+                        credentials: "same-origin",
+                        signal: controller.signal
+                    });
 
                     if (response.status === 401) {
                         window.location.assign("/login");
@@ -1920,7 +1663,6 @@
                     }
 
                     return data;
-
                 } catch (error) {
                     if (error.name === "AbortError") {
                         throw new Error(
@@ -1929,7 +1671,6 @@
                     }
 
                     throw error;
-
                 } finally {
                     clearTimeout(timer);
                 }
@@ -1950,15 +1691,10 @@
                     say(
                         "Link copiado! Agora você pode colar na conversa com seu chefe."
                     );
-
                 } catch {
                     link.focus();
                     link.select();
-
-                    link.setSelectionRange(
-                        0,
-                        link.value.length
-                    );
+                    link.setSelectionRange(0, link.value.length);
 
                     say(
                         "O navegador não copiou automaticamente. " +
@@ -1969,9 +1705,7 @@
             }
 
             async function loadReports() {
-                const reports = await requestJSON(
-                    "/api/reports"
-                );
+                const reports = await requestJSON("/api/reports");
 
                 list.replaceChildren();
 
@@ -2001,10 +1735,7 @@
                     );
 
                     info.append(
-                        make(
-                            "strong",
-                            report.title
-                        )
+                        make("strong", report.title)
                     );
 
                     info.append(
@@ -2017,20 +1748,15 @@
                         )
                     );
 
-                    const generated = new Date(
-                        report.created_at
-                    );
+                    const generated = new Date(report.created_at);
 
                     info.append(
                         make(
                             "small",
                             "Gerado em " +
-                            generated.toLocaleString(
-                                "pt-BR",
-                                {
-                                    timeZone: "America/Sao_Paulo"
-                                }
-                            )
+                            generated.toLocaleString("pt-BR", {
+                                timeZone: "America/Sao_Paulo"
+                            })
                         )
                     );
 
@@ -2041,11 +1767,7 @@
                     );
 
                     if (report.active && report.url) {
-                        const view = make(
-                            "a",
-                            "Abrir",
-                            "button"
-                        );
+                        const view = make("a", "Abrir", "button");
 
                         view.href = report.url;
                         view.target = "_blank";
@@ -2078,7 +1800,6 @@
                                     `/api/reports/${report.id}/revoke`,
                                     {
                                         method: "POST",
-
                                         headers: {
                                             "X-CSRF-Token": csrf
                                         }
@@ -2107,7 +1828,6 @@
                                     "Link desativado. A página e o PDF " +
                                     "desse link não estão mais disponíveis."
                                 );
-
                             } catch (error) {
                                 say(error.message, true);
                                 revoke.disabled = false;
@@ -2119,7 +1839,6 @@
                             copyButton,
                             revoke
                         );
-
                     } else {
                         actions.append(
                             make(
@@ -2130,118 +1849,105 @@
                         );
                     }
 
-                    card.append(
-                        info,
-                        actions
-                    );
-
+                    card.append(info, actions);
                     list.append(card);
                 }
             }
 
             root.querySelectorAll(
                 "form[data-report-mode]"
-            ).forEach((form) => {
-                form.addEventListener(
-                    "submit",
-                    async (event) => {
-                        event.preventDefault();
+            ).forEach(form => {
+                form.addEventListener("submit", async event => {
+                    event.preventDefault();
 
-                        if (
-                            generating ||
-                            !form.reportValidity()
-                        ) {
-                            return;
-                        }
+                    if (
+                        generating ||
+                        !form.reportValidity()
+                    ) {
+                        return;
+                    }
 
-                        generating = true;
+                    generating = true;
 
-                        const buttons = root.querySelectorAll(
-                            "button[data-generate]"
+                    const buttons = root.querySelectorAll(
+                        "button[data-generate]"
+                    );
+
+                    buttons.forEach(button => {
+                        button.disabled = true;
+                    });
+
+                    const button = form.querySelector(
+                        "button[data-generate]"
+                    );
+
+                    const originalText = button.textContent;
+                    button.textContent = "Gerando…";
+
+                    const payload = {
+                        mode: form.dataset.reportMode
+                    };
+
+                    if (payload.mode === "week") {
+                        payload.anchor = document.getElementById(
+                            "share-week"
+                        ).value;
+                    }
+
+                    if (payload.mode === "month") {
+                        payload.month = document.getElementById(
+                            "share-month"
+                        ).value;
+                    }
+
+                    say(
+                        "Preparando o fechamento de todos os técnicos…"
+                    );
+
+                    try {
+                        const report = await requestJSON(
+                            "/api/reports",
+                            {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "X-CSRF-Token": csrf
+                                },
+                                body: JSON.stringify(payload)
+                            }
                         );
 
-                        buttons.forEach((button) => {
-                            button.disabled = true;
-                        });
-
-                        const button = form.querySelector(
-                            "button[data-generate]"
-                        );
-
-                        const originalText = button.textContent;
-
-                        button.textContent = "Gerando…";
-
-                        const payload = {
-                            mode: form.dataset.reportMode
-                        };
-
-                        if (payload.mode === "week") {
-                            payload.anchor = document.getElementById(
-                                "share-week"
-                            ).value;
-                        }
-
-                        if (payload.mode === "month") {
-                            payload.month = document.getElementById(
-                                "share-month"
-                            ).value;
-                        }
+                        showLink(report.url);
 
                         say(
-                            "Preparando o fechamento de todos os técnicos…"
+                            "Relatório gerado! Clique em Copiar link para enviar."
                         );
 
                         try {
-                            const report = await requestJSON(
-                                "/api/reports",
-                                {
-                                    method: "POST",
-
-                                    headers: {
-                                        "Content-Type": "application/json",
-                                        "X-CSRF-Token": csrf
-                                    },
-
-                                    body: JSON.stringify(payload)
-                                }
-                            );
-
-                            showLink(report.url);
-
+                            await loadReports();
+                        } catch {
                             say(
-                                "Relatório gerado! Clique em Copiar link para enviar."
+                                "Relatório gerado e link disponível. " +
+                                "Não foi possível atualizar a lista agora."
                             );
-
-                            try {
-                                await loadReports();
-
-                            } catch {
-                                say(
-                                    "Relatório gerado e link disponível. " +
-                                    "Não foi possível atualizar a lista agora."
-                                );
-                            }
-
-                        } catch (error) {
-                            say(
-                                error.message +
-                                " Antes de repetir a geração, clique em " +
-                                "Atualizar lista para conferir se o relatório foi salvo.",
-                                true
-                            );
-
-                        } finally {
-                            generating = false;
-
-                            buttons.forEach((item) => {
-                                item.disabled = false;
-                            });
-
-                            button.textContent = originalText;
                         }
+                    } catch (error) {
+                        say(
+                            error.message +
+                            " Antes de repetir a geração, clique em " +
+                            "Atualizar lista para conferir se o relatório foi salvo.",
+                            true
+                        );
+                    } finally {
+                        generating = false;
+
+                        buttons.forEach(item => {
+                            item.disabled = false;
+                        });
+
+                        button.textContent = originalText;
                     }
-                );
+                });
             });
 
             document.getElementById(
@@ -2258,10 +1964,8 @@
                 try {
                     await loadReports();
                     say("Lista atualizada.");
-
                 } catch (error) {
                     say(error.message, true);
-
                 } finally {
                     this.disabled = false;
                 }
@@ -2271,9 +1975,7 @@
                 "share-week"
             ).value;
 
-            const [year, month] = current.split("-").map(
-                Number
-            );
+            const [year, month] = current.split("-").map(Number);
 
             const previousMonth = new Date(
                 year,
@@ -2296,7 +1998,7 @@
             monthInput.value = monthValue;
             monthInput.max = monthValue;
 
-            loadReports().catch((error) => {
+            loadReports().catch(error => {
                 list.replaceChildren(
                     make(
                         "p",
@@ -2309,7 +2011,5 @@
             });
         })();
     </script>
-
 </body>
-
 </html>
