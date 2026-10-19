@@ -27,7 +27,6 @@ APELIDOS_TECNICOS = {
     "magno": [
         "magnovanio",
     ],
-
     "wildiney": [
         "wild",
         "wildinei",
@@ -40,50 +39,40 @@ APELIDOS_ITENS = {
         "conector apc",
         "conectores apc",
     ],
-
     "upc": [
         "conector upc",
         "conectores upc",
     ],
-
     "abracadeira": [
         "abracadeiras",
     ],
-
     "cunha": [
         "cunhas",
     ],
-
     "bucha de acabamento": [
         "buchas de acabamento",
     ],
-
     "fita isolante": [
         "fitas isolantes",
         "fitaisolante",
     ],
-
     "pino jack rj45": [
         "pinos jack rj45",
         "pino rj45",
         "pinos rj45",
         "rj45",
     ],
-
     "miguelao": [
         "migueloes",
     ],
-
     "cabo de rede": [
         "cabos de rede",
     ],
-
     "cabo miniflatdrop": [
         "cabo miniflat drop",
         "miniflatdrop",
         "miniflat drop",
     ],
-
     "xc220": ["xc 220"],
     "xx530": ["xx 530"],
     "xx535": ["xx 535"],
@@ -91,13 +80,11 @@ APELIDOS_ITENS = {
     "121ac": ["121 ac"],
     "1200r": ["1200 r"],
     "ex141": ["ex 141"],
-
     "halos12": [
         "halo s12",
         "halo s 12",
         "halos 12",
     ],
-
     "mr60x": ["mr 60x"],
     "onu 1010": ["onu1010"],
     "firestick": ["fire stick"],
@@ -246,11 +233,7 @@ def _mapa(registros, apelidos):
 
     for registro in registros:
         nome = normalizar(registro["name"])
-
-        formas = [nome] + apelidos.get(
-            nome,
-            [],
-        )
+        formas = [nome] + apelidos.get(nome, [])
 
         for forma in formas:
             chave = tuple(tokens(forma))
@@ -287,13 +270,8 @@ def _encontrar(partes, posicao, mapa):
 def _quantidade(partes, posicao):
     palavra = partes[posicao]
 
-    if re.fullmatch(
-        r"\d+(?:,\d{1,3})?",
-        palavra,
-    ):
-        return Decimal(
-            palavra.replace(",", ".")
-        ), 1
+    if re.fullmatch(r"\d+(?:,\d{1,3})?", palavra):
+        return Decimal(palavra.replace(",", ".")), 1
 
     if palavra in NUMEROS:
         valor = NUMEROS[palavra]
@@ -303,15 +281,9 @@ def _quantidade(partes, posicao):
             20 <= valor < 100
             and posicao + 2 < len(partes)
             and partes[posicao + 1] == "e"
-            and 0 < NUMEROS.get(
-                partes[posicao + 2],
-                0,
-            ) < 10
+            and 0 < NUMEROS.get(partes[posicao + 2], 0) < 10
         ):
-            valor += NUMEROS[
-                partes[posicao + 2]
-            ]
-
+            valor += NUMEROS[partes[posicao + 2]]
             tamanho = 3
 
         return Decimal(valor), tamanho
@@ -324,14 +296,11 @@ def _quantidade(partes, posicao):
 # ==========================================================
 
 def _linha(item, tecnico, dia, quantidade):
-    custo = Decimal(
-        str(item["cost"])
-    )
+    custo = Decimal(str(item["cost"]))
 
     if not custo.is_finite() or custo < 0:
         raise ValueError(
-            "Custo inválido no catálogo: "
-            + item["name"]
+            "Custo inválido no catálogo: " + item["name"]
         )
 
     if (
@@ -345,25 +314,19 @@ def _linha(item, tecnico, dia, quantidade):
         )
     ):
         raise ValueError(
-            "Quantidade inválida para "
-            + item["name"]
+            "Quantidade inválida para " + item["name"]
         )
 
     return {
         "date": dia.isoformat(),
-
         "technician_id": tecnico["id"],
         "technician": tecnico["name"],
-
         "item_id": item["id"],
         "item": item["name"],
-
         "unit": item["unit"],
         "category": item["category"],
-
         "quantity": str(quantidade),
         "cost": str(custo),
-
         "kind": "retirada",
     }
 
@@ -388,18 +351,10 @@ def _resultado(
         "rows": linhas,
         "issues": pendencias,
         "warnings": avisos or [],
-
-        "can_confirm": (
-            bool(linhas)
-            and not pendencias
-        ),
-
+        "can_confirm": bool(linhas) and not pendencias,
         "used_default_date": (
-            padrao.isoformat()
-            if padrao
-            else None
+            padrao.isoformat() if padrao else None
         ),
-
         "format": formato,
         "sgp_events": eventos or [],
     }
@@ -407,7 +362,6 @@ def _resultado(
 
 # ==========================================================
 # TEXTO DIGITADO
-# Mantém a compatibilidade com a primeira versão.
 # ==========================================================
 
 def _organizar_texto(
@@ -418,15 +372,8 @@ def _organizar_texto(
     fim,
     padrao,
 ):
-    mapa_tecnicos = _mapa(
-        tecnicos,
-        APELIDOS_TECNICOS,
-    )
-
-    mapa_itens = _mapa(
-        itens,
-        APELIDOS_ITENS,
-    )
+    mapa_tecnicos = _mapa(tecnicos, APELIDOS_TECNICOS)
+    mapa_itens = _mapa(itens, APELIDOS_ITENS)
 
     partes = tokens(texto)
 
@@ -443,7 +390,6 @@ def _organizar_texto(
 
         pendencias.append({
             "message": mensagem,
-
             "excerpt": " ".join(
                 partes[max(0, pos - 2):pos + 7]
             ),
@@ -453,14 +399,7 @@ def _organizar_texto(
         palavra = partes[posicao]
 
         if (
-            palavra in {
-                ",",
-                ";",
-                ":",
-                ".",
-                "(",
-                ")",
-            }
+            palavra in {",", ";", ":", ".", "(", ")"}
             or (
                 palavra == "-"
                 and posicao
@@ -485,18 +424,13 @@ def _organizar_texto(
 
             tecnico = encontrado
             nome_sem_item = True
-
             posicao += tamanho
             continue
 
         if palavra in DIAS:
             candidatas = [
                 inicio + timedelta(days=numero)
-
-                for numero in range(
-                    (fim - inicio).days + 1
-                )
-
+                for numero in range((fim - inicio).days + 1)
                 if (
                     inicio + timedelta(days=numero)
                 ).weekday() == DIAS[palavra]
@@ -528,11 +462,8 @@ def _organizar_texto(
                         palavra,
                         "%d/%m/%Y",
                     ).date()
-
                 else:
-                    dia = date.fromisoformat(
-                        palavra
-                    )
+                    dia = date.fromisoformat(palavra)
 
                 if not inicio <= dia <= fim:
                     raise ValueError()
@@ -566,10 +497,7 @@ def _organizar_texto(
             posicao += 1
             continue
 
-        quantidade, tamanho = _quantidade(
-            partes,
-            posicao,
-        )
+        quantidade, tamanho = _quantidade(partes, posicao)
 
         if quantidade is None:
             problema(
@@ -589,10 +517,7 @@ def _organizar_texto(
             posicao < len(partes)
             and partes[posicao] in UNIDADES
         ):
-            unidade = UNIDADES[
-                partes[posicao]
-            ]
-
+            unidade = UNIDADES[partes[posicao]]
             posicao += 1
 
         if (
@@ -613,7 +538,6 @@ def _organizar_texto(
                 "Use o nome completo do catálogo.",
                 comeco,
             )
-
             continue
 
         posicao += tamanho_item
@@ -631,10 +555,7 @@ def _organizar_texto(
                 posicao += 1
                 continue
 
-            unidade = UNIDADES[
-                partes[posicao]
-            ]
-
+            unidade = UNIDADES[partes[posicao]]
             posicao += 1
 
         if not tecnico or not dia:
@@ -643,7 +564,6 @@ def _organizar_texto(
                 "ou escolha uma data padrão.",
                 comeco,
             )
-
             continue
 
         nome_sem_item = False
@@ -663,29 +583,17 @@ def _organizar_texto(
                     "Use a unidade do catálogo.",
                     comeco,
                 )
-
                 continue
 
             quantidade *= fator
 
         try:
             linhas.append(
-                _linha(
-                    item,
-                    tecnico,
-                    dia,
-                    quantidade,
-                )
+                _linha(item, tecnico, dia, quantidade)
             )
 
-        except (
-            ValueError,
-            InvalidOperation,
-        ) as erro:
-            problema(
-                str(erro),
-                comeco,
-            )
+        except (ValueError, InvalidOperation) as erro:
+            problema(str(erro), comeco)
 
         if len(linhas) > 1000:
             raise ValueError(
@@ -693,14 +601,10 @@ def _organizar_texto(
             )
 
     if nome_sem_item:
-        problema(
-            "O último técnico está sem itens."
-        )
+        problema("O último técnico está sem itens.")
 
     if not linhas and not pendencias:
-        problema(
-            "Nenhuma retirada encontrada."
-        )
+        problema("Nenhuma retirada encontrada.")
 
     return _resultado(
         linhas,
@@ -716,27 +620,15 @@ def _organizar_texto(
 
 class _TextoCelula(HTMLParser):
     def __init__(self):
-        super().__init__(
-            convert_charrefs=True
-        )
-
+        super().__init__(convert_charrefs=True)
         self.partes = []
 
     def handle_starttag(self, tag, attrs):
-        if tag in {
-            "br",
-            "p",
-            "div",
-            "li",
-        }:
+        if tag in {"br", "p", "div", "li"}:
             self.partes.append("\n")
 
     def handle_endtag(self, tag):
-        if tag in {
-            "p",
-            "div",
-            "li",
-        }:
+        if tag in {"p", "div", "li"}:
             self.partes.append("\n")
 
     def handle_data(self, data):
@@ -747,15 +639,10 @@ def _celula(valor):
     leitor = _TextoCelula()
 
     leitor.feed(
-        unescape(valor).replace(
-            "\xa0",
-            " ",
-        )
+        unescape(valor).replace("\xa0", " ")
     )
 
-    return "".join(
-        leitor.partes
-    ).strip()
+    return "".join(leitor.partes).strip()
 
 
 # ==========================================================
@@ -769,20 +656,14 @@ def _tecnico_sgp(destino, tecnicos):
         _chave(destino),
     )
 
-    nome = " ".join(
-        nome.split()
-    )
-
+    nome = " ".join(nome.split())
     encontrados = []
 
     for tecnico in tecnicos:
-        chave = _chave(
-            tecnico["name"]
-        )
+        chave = _chave(tecnico["name"])
 
         formas = [chave] + [
             _chave(apelido)
-
             for apelido in APELIDOS_TECNICOS.get(
                 normalizar(tecnico["name"]),
                 [],
@@ -798,11 +679,7 @@ def _tecnico_sgp(destino, tecnicos):
                     _chave(apelido),
                 ).split()
             )
-
-            for apelido in tecnico.get(
-                "sgp_aliases",
-                [],
-            )
+            for apelido in tecnico.get("sgp_aliases", [])
         ]
 
         if nome in formas:
@@ -821,42 +698,45 @@ def _tecnico_sgp(destino, tecnicos):
 
 def _item_sgp(descricao, itens):
     nome = _chave(descricao)
-
     candidatos = []
 
     for item in itens:
-        chave = _chave(
-            item["name"]
-        )
-
+        chave = _chave(item["name"])
         achou = False
 
-        if chave in {
-            "apc",
-            "upc",
-        }:
+        if chave in {"apc", "upc"}:
+            achou = bool(
+                re.search(r"\b" + chave + r"\b", nome)
+                and "conector" in nome
+            )
+
+        elif chave == "cabo miniflatdrop":
+            # O SGP usa MINI FLAT DROP com palavras separadas.
+            # Também aceita MINIFLATDROP e MINIFLAT DROP.
+            #
+            # Exemplos:
+            # CABO OPITICO MINI FLAT DROP 1 FO SM - BOB 1KM ARCTICUS
+            # CABO OPTICO MINI FLAT DROP
+            # CABO MINIFLATDROP
+            #
+            # "BOB 1KM" pertence à descrição do produto.
+            # A quantidade final do SGP já está em metros.
+            # Portanto, 1000.0 continua sendo 1000 metros.
             achou = bool(
                 re.search(
-                    r"\b" + chave + r"\b",
+                    r"\bmini\s*flat\s*drop\b",
                     nome,
                 )
-                and "conector" in nome
             )
 
         elif chave == "miguelao":
             achou = bool(
-                re.search(
-                    r"\bmiguelao\b",
-                    nome,
-                )
+                re.search(r"\bmiguelao\b", nome)
             )
 
         elif chave == "cunha":
             achou = bool(
-                re.search(
-                    r"\bcunha\b",
-                    nome,
-                )
+                re.search(r"\bcunha\b", nome)
             )
 
         elif chave in {
@@ -874,9 +754,7 @@ def _item_sgp(descricao, itens):
 
             achou = bool(
                 re.search(
-                    r"\b"
-                    + modelos[chave]
-                    + r"\b",
+                    r"\b" + modelos[chave] + r"\b",
                     nome,
                 )
             )
@@ -884,7 +762,6 @@ def _item_sgp(descricao, itens):
         else:
             formas = [chave] + [
                 _chave(apelido)
-
                 for apelido in APELIDOS_ITENS.get(
                     normalizar(item["name"]),
                     [],
@@ -893,12 +770,9 @@ def _item_sgp(descricao, itens):
 
             achou = any(
                 re.search(
-                    r"\b"
-                    + re.escape(forma)
-                    + r"\b",
+                    r"\b" + re.escape(forma) + r"\b",
                     nome,
                 )
-
                 for forma in formas
             )
 
@@ -915,16 +789,14 @@ def _item_sgp(descricao, itens):
 
 # ==========================================================
 # LEITURA DA TABELA
-# Aceita Markdown com "|" ou texto separado por tabulações.
+# Aceita Markdown ou texto separado por tabulações.
 # ==========================================================
 
 def _linhas_tabela(texto):
     if "|" in texto:
         return [
             linha.strip().strip("|").split("|")
-
             for linha in texto.splitlines()
-
             if "|" in linha
         ]
 
@@ -953,11 +825,8 @@ def _organizar_sgp(
     eventos = []
 
     cabecalho = None
-
     ids_vistos = {}
-
     encontrou_registro = False
-
     destinos_desconhecidos = set()
 
     def problema(mensagem, trecho):
@@ -984,7 +853,7 @@ def _organizar_sgp(
         if not any(chaves):
             continue
 
-        # Localiza as colunas pelo cabeçalho.
+        # Aceita cabeçalhos repetidos entre tabelas.
         if "id" in chaves and "itens" in chaves:
             exigidas = [
                 "id",
@@ -1004,23 +873,17 @@ def _organizar_sgp(
                     "no cabeçalho do SGP.",
                     " | ".join(celulas),
                 )
-
                 continue
 
             cabecalho = {
                 coluna: chaves.index(coluna)
                 for coluna in exigidas
             }
-
             continue
 
         if cabecalho is None:
             if any(
-                re.fullmatch(
-                    r"\d+",
-                    celula.strip(),
-                )
-
+                re.fullmatch(r"\d+", celula.strip())
                 for celula in celulas
             ):
                 problema(
@@ -1028,7 +891,6 @@ def _organizar_sgp(
                     "da tabela do SGP.",
                     " | ".join(celulas),
                 )
-
             continue
 
         if max(cabecalho.values()) >= len(celulas):
@@ -1036,7 +898,6 @@ def _organizar_sgp(
                 "Linha incompleta na tabela.",
                 " | ".join(celulas),
             )
-
             continue
 
         registro = {
@@ -1051,7 +912,6 @@ def _organizar_sgp(
                 "ID de movimentação inválido.",
                 " | ".join(celulas),
             )
-
             continue
 
         encontrou_registro = True
@@ -1071,9 +931,7 @@ def _organizar_sgp(
                         registro["data"],
                         formato,
                     )
-
                     break
-
                 except ValueError:
                     pass
 
@@ -1087,7 +945,6 @@ def _organizar_sgp(
                 + ".",
                 registro["data"],
             )
-
             continue
 
         dia = momento.date()
@@ -1102,7 +959,6 @@ def _organizar_sgp(
                 + dia.strftime("%d/%m/%Y")
                 + ": fora do período; não será importada."
             )
-
             continue
 
         # APENAS MOVIMENTAÇÕES APROVADAS
@@ -1115,7 +971,6 @@ def _organizar_sgp(
                 + registro["status"]
                 + "; não será importada."
             )
-
             continue
 
         # APENAS SAÍDAS DO ALMOXARIFADO MATRIZ
@@ -1130,7 +985,6 @@ def _organizar_sgp(
                 + ": a origem não é Almoxarifado Matriz; "
                 "não será importada."
             )
-
             continue
 
         # IDENTIFICA O TÉCNICO
@@ -1151,26 +1005,23 @@ def _organizar_sgp(
                 + ".",
                 "SGP " + sgp_id,
             )
-
             continue
 
         retiradas = []
         erros_antes = len(pendencias)
 
-        # CADA LINHA DA CÉLULA "ITENS"
+        # CADA LINHA DA CÉLULA ITENS
 
         for indice, parte in enumerate(
             registro["itens"].splitlines(),
             1,
         ):
-            parte = " ".join(
-                parte.split()
-            )
+            parte = " ".join(parte.split())
 
             if not parte:
                 continue
 
-            # São legendas de unidade, não produtos.
+            # Legendas de unidade não são produtos.
             if re.fullmatch(
                 r"\((?:uni|un|pc|pcs|pç|m|mt|metros?|unidades?)\)",
                 normalizar(parte),
@@ -1190,14 +1041,11 @@ def _organizar_sgp(
                     + ".",
                     parte,
                 )
-
                 continue
 
-            corpo, quantidade = (
-                quantidade_final.groups()
-            )
+            corpo, quantidade = quantidade_final.groups()
 
-            # O SGP utiliza valores como 1.0 e 100.0.
+            # Valores como 1.0 e 1000.0 são decimais do SGP.
             quantidade = Decimal(
                 quantidade.replace(",", ".")
             )
@@ -1218,9 +1066,7 @@ def _organizar_sgp(
             ):
                 serial = segmentos.pop()
 
-            descricao = " - ".join(
-                segmentos
-            )
+            descricao = " - ".join(segmentos)
 
             item = _item_sgp(
                 descricao,
@@ -1234,7 +1080,6 @@ def _organizar_sgp(
                     + ". Não foi atribuído um preço.",
                     descricao,
                 )
-
                 continue
 
             try:
@@ -1245,10 +1090,7 @@ def _organizar_sgp(
                     quantidade,
                 )
 
-            except (
-                ValueError,
-                InvalidOperation,
-            ) as erro:
+            except (ValueError, InvalidOperation) as erro:
                 problema(
                     str(erro)
                     + " no SGP "
@@ -1256,7 +1098,6 @@ def _organizar_sgp(
                     + ".",
                     parte,
                 )
-
                 continue
 
             linha.update(
@@ -1264,7 +1105,6 @@ def _organizar_sgp(
                 sgp_line=indice,
                 sgp_serial=serial,
                 sgp_description=descricao,
-
                 sgp_datetime=momento.isoformat(
                     timespec="seconds"
                 ),
@@ -1283,31 +1123,23 @@ def _organizar_sgp(
                 registro["itens"],
             )
 
-        # Não aproveita parcialmente uma movimentação com erros.
-        # A confirmação geral também será bloqueada.
+        # Uma movimentação com erros não é aproveitada parcialmente.
         if len(pendencias) != erros_antes:
             continue
 
         # ASSINATURA DO CONTEÚDO DE CADA ID
+        # Mantém o mesmo cálculo da versão anterior.
 
         canonico = sorted(
             (
                 linha["item_id"],
-
                 format(
-                    Decimal(
-                        linha["quantity"]
-                    ).normalize(),
+                    Decimal(linha["quantity"]).normalize(),
                     "f",
                 ),
-
                 linha["sgp_serial"],
-
-                _chave(
-                    linha["sgp_description"]
-                ),
+                _chave(linha["sgp_description"]),
             )
-
             for linha in retiradas
         )
 
@@ -1318,13 +1150,12 @@ def _organizar_sgp(
                     tecnico["id"],
                     canonico,
                 ],
-
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode()
         ).hexdigest()
 
-        # REPETIÇÃO DENTRO DA MESMA TABELA COLADA
+        # REPETIÇÃO DENTRO DAS TABELAS COLADAS
 
         if sgp_id in ids_vistos:
             if ids_vistos[sgp_id] != assinatura:
@@ -1335,7 +1166,6 @@ def _organizar_sgp(
                     "Confira a tabela.",
                     sgp_id,
                 )
-
             else:
                 avisos.append(
                     "SGP "
@@ -1343,7 +1173,6 @@ def _organizar_sgp(
                     + ": repetida na tabela colada; "
                     "considerada apenas uma vez."
                 )
-
             continue
 
         ids_vistos[sgp_id] = assinatura
@@ -1355,7 +1184,6 @@ def _organizar_sgp(
             "fingerprint": assinatura,
             "date": dia.isoformat(),
             "technician_id": tecnico["id"],
-
             "datetime": momento.isoformat(
                 timespec="seconds"
             ),
@@ -1427,6 +1255,7 @@ def organizar_retiradas(
         )
 
     # TABELA COPIADA DO SGP
+
     if "|" in texto or "\t" in texto:
         return _organizar_sgp(
             texto,
@@ -1437,6 +1266,7 @@ def organizar_retiradas(
         )
 
     # TEXTO DIGITADO MANUALMENTE
+
     padrao = (
         date.fromisoformat(data_padrao)
         if data_padrao
