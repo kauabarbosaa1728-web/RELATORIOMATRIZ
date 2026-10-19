@@ -35,7 +35,8 @@
             border-color: #57734d;
         }
 
-        #shared-reports [hidden] {
+        #shared-reports [hidden],
+        #text-import [hidden] {
             display: none !important;
         }
 
@@ -223,9 +224,212 @@
             color: var(--coral);
         }
 
+        /* ASSISTENTE DE RETIRADAS POR TEXTO */
+
+        #text-import {
+            margin-bottom: 24px;
+            scroll-margin-top: 20px;
+            border-color: #3b8066;
+        }
+
+        .text-import-fields {
+            min-width: 0;
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+
+        .text-import-legend {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+
+        .text-import-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        .text-import-grid label {
+            min-width: 0;
+        }
+
+        .text-import-grid input,
+        .text-import-grid select {
+            width: 100%;
+        }
+
+        #text-default-date {
+            width: min(100%, 260px);
+        }
+
+        #text-source {
+            display: block;
+            width: 100%;
+            min-height: 190px;
+            resize: vertical;
+            padding: 17px;
+            border: 1px solid #3f6655;
+            border-radius: 12px;
+            background: #0d1915;
+            color: var(--text);
+            font: 14px/1.9 "Segoe UI", Arial, sans-serif;
+            color-scheme: dark;
+        }
+
+        #text-source::placeholder {
+            color: #77968a;
+        }
+
+        #text-source:focus {
+            outline: 2px solid #40dfae77;
+            outline-offset: 2px;
+        }
+
+        .text-import-check {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            line-height: 1.7;
+        }
+
+        .text-import-check input {
+            flex: 0 0 auto;
+            width: 17px;
+            height: 17px;
+            margin: 2px 0 0;
+            padding: 0;
+            accent-color: var(--green);
+        }
+
+        .text-import-actions {
+            margin-top: 19px;
+        }
+
+        .text-import-status {
+            margin-top: 22px;
+            padding: 17px;
+            border: 1px solid #375b49;
+            border-radius: 11px;
+            background: #1b3c2b44;
+            color: #c2e4d1;
+            font-size: 13px;
+            line-height: 1.8;
+            white-space: pre-line;
+        }
+
+        .text-import-status.is-error {
+            border-color: #795247;
+            background: #41281f55;
+            color: var(--coral);
+        }
+
+        .text-import-preview-head {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin: 25px 0 20px;
+            padding-top: 23px;
+            border-top: 1px solid var(--line);
+        }
+
+        .text-import-preview-head h4 {
+            margin: 0 0 7px;
+            font-size: 17px;
+        }
+
+        .text-import-preview-head p {
+            font-size: 12px;
+        }
+
+        .text-import-total small {
+            display: block;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .text-import-total strong {
+            display: block;
+            margin-top: 7px;
+            color: var(--green);
+            font-size: 27px;
+        }
+
+        .text-import-warnings,
+        .text-import-issues {
+            margin: 16px 0;
+            padding: 17px 22px;
+            border: 1px solid #74613b;
+            border-radius: 10px;
+            background: #55401f33;
+            color: #e6d1a2;
+            font-size: 12px;
+            line-height: 1.9;
+            overflow-wrap: anywhere;
+        }
+
+        .text-import-warnings {
+            padding-left: 35px;
+        }
+
+        .text-import-issues {
+            border-color: #795247;
+            background: #41281f33;
+            color: #edb6a8;
+        }
+
+        .text-import-issues h4 {
+            margin: 0 0 10px;
+            font-size: 14px;
+        }
+
+        .text-import-issues ul {
+            padding-left: 20px;
+        }
+
+        .text-import-issues li {
+            margin-bottom: 9px;
+        }
+
+        .text-import-issues code {
+            color: #f4d2b0;
+            white-space: normal;
+        }
+
+        .text-import-technicians {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 9px;
+            margin: 18px 0;
+        }
+
+        .text-import-technicians span {
+            padding: 9px 12px;
+            border: 1px solid #355945;
+            border-radius: 8px;
+            background: #183025;
+            color: #bdd9c8;
+            font-size: 12px;
+        }
+
+        .text-import-confirm {
+            margin-top: 20px;
+        }
+
+        /* RESPONSIVIDADE */
+
         @media (max-width: 1100px) {
             .share-options {
                 grid-template-columns: minmax(0, 1fr);
+            }
+
+            .text-import-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -247,6 +451,20 @@
             .share-actions .button {
                 flex: 1;
             }
+
+            .text-import-grid {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 0;
+            }
+
+            .text-import-actions button,
+            .text-import-confirm {
+                width: 100%;
+            }
+
+            .text-import-total strong {
+                font-size: 24px;
+            }
         }
     </style>
 </head>
@@ -258,9 +476,7 @@
     <aside>
 
         <div class="logo">
-            <div class="brand-icon" aria-hidden="true">
-                M
-            </div>
+            <div class="brand-icon" aria-hidden="true">M</div>
 
             <div>
                 MATRIZ
@@ -279,6 +495,10 @@
             <button type="button" onclick="openMovement()">
                 ＋ Lançar movimentação
             </button>
+
+            <a href="#text-import">
+                ✎ Relatório por texto
+            </a>
 
             <a href="#shared-reports">
                 ↗ Gerar link de relatório
@@ -619,6 +839,382 @@
 
         </section>
 
+        <!-- RETIRADAS POR TEXTO -->
+
+        <section
+            id="text-import"
+            class="panel"
+            aria-labelledby="text-import-title"
+        >
+
+            <div class="section-head">
+
+                <div>
+                    <p class="eyebrow">
+                        ASSISTENTE DE RELATÓRIOS
+                    </p>
+
+                    <h3 id="text-import-title">
+                        Escreva as retiradas. Confira. Gere o link.
+                    </h3>
+                </div>
+
+                <span class="chip">
+                    Organização por técnico
+                </span>
+
+            </div>
+
+            <p class="share-intro">
+                Cole o que cada técnico retirou. O assistente organiza
+                os itens e calcula os custos do catálogo.
+                Nada é lançado até você conferir e confirmar.
+            </p>
+
+            <form id="text-import-form">
+
+                <fieldset
+                    id="text-import-fields"
+                    class="text-import-fields"
+                >
+
+                    <legend class="text-import-legend">
+                        Período e retiradas
+                    </legend>
+
+                    <div class="text-import-grid">
+
+                        <label for="text-period">
+                            Período
+
+                            <select id="text-period">
+                                <option value="week">
+                                    Segunda a sexta
+                                </option>
+
+                                <option value="last30">
+                                    Últimos 30 dias
+                                </option>
+
+                                <option value="month">
+                                    Mês fechado
+                                </option>
+
+                                <option value="custom">
+                                    Escolher datas
+                                </option>
+                            </select>
+                        </label>
+
+                        <label
+                            for="text-week"
+                            id="text-week-label"
+                        >
+                            Data da semana
+
+                            <input
+                                id="text-week"
+                                type="date"
+                                value="{{ today }}"
+                                max="{{ today }}"
+                            >
+                        </label>
+
+                        <label
+                            for="text-month"
+                            id="text-month-label"
+                            hidden
+                        >
+                            Mês encerrado
+
+                            <input
+                                id="text-month"
+                                type="month"
+                            >
+                        </label>
+
+                        <label for="text-start">
+                            De
+
+                            <input
+                                id="text-start"
+                                type="date"
+                                max="{{ today }}"
+                                required
+                            >
+                        </label>
+
+                        <label for="text-end">
+                            Até
+
+                            <input
+                                id="text-end"
+                                type="date"
+                                max="{{ today }}"
+                                required
+                            >
+                        </label>
+
+                    </div>
+
+                    <label
+                        class="text-import-check"
+                        for="text-use-default"
+                    >
+                        <input
+                            id="text-use-default"
+                            type="checkbox"
+                        >
+
+                        <span>
+                            Usar uma data escolhida por mim quando
+                            o texto não informar a data.
+                        </span>
+                    </label>
+
+                    <label
+                        id="text-default-label"
+                        for="text-default-date"
+                        hidden
+                    >
+                        Data para as retiradas sem data
+
+                        <input
+                            id="text-default-date"
+                            type="date"
+                            max="{{ today }}"
+                        >
+                    </label>
+
+                    <p class="footnote muted">
+                        Sem data padrão, informe datas completas no texto.
+                        Dias como “segunda” são aceitos quando houver apenas
+                        uma segunda-feira no período.
+                        Os itens seguintes usam a última data informada.
+                    </p>
+
+                    <label for="text-source">
+                        O que cada técnico retirou?
+                    </label>
+
+                    <textarea
+                        id="text-source"
+                        rows="8"
+                        maxlength="20000"
+                        required
+                        aria-describedby="text-help"
+                        placeholder="Rogério pegou 3 APC e 4 cunhas.&#10;Magno retirou 1 XC220.&#10;Wildiney pegou 100 metros de cabo miniflatdrop."
+                    ></textarea>
+
+                    <p
+                        id="text-help"
+                        class="footnote muted"
+                    >
+                        Escreva a quantidade antes do item.
+                        Use nomes específicos: APC, UPC,
+                        Cabo de rede ou Cabo Miniflatdrop.
+                        Para mil metros, escreva 1000.
+                        Devoluções continuam no formulário de movimentação,
+                        com a retirada original.
+                    </p>
+
+                    <div class="actions text-import-actions">
+
+                        <button
+                            id="text-organize"
+                            class="primary"
+                            type="submit"
+                        >
+                            Organizar retiradas →
+                        </button>
+
+                        <button
+                            id="text-example"
+                            type="button"
+                        >
+                            Preencher exemplo
+                        </button>
+
+                    </div>
+
+                </fieldset>
+
+            </form>
+
+            <div
+                id="text-status"
+                class="text-import-status"
+                role="status"
+                aria-live="polite"
+            >
+                Olá! Me conte o que cada técnico retirou.
+                Vou preparar uma prévia para você conferir.
+            </div>
+
+            <!-- PRÉVIA ANTES DA CONFIRMAÇÃO -->
+
+            <div id="text-preview" hidden>
+
+                <div class="text-import-preview-head">
+
+                    <div>
+                        <p class="eyebrow">
+                            PRÉVIA — AINDA NÃO FOI SALVA
+                        </p>
+
+                        <h4>
+                            Confira as retiradas organizadas
+                        </h4>
+
+                        <p
+                            id="text-preview-period"
+                            class="muted"
+                        ></p>
+                    </div>
+
+                    <div class="text-import-total">
+                        <small>
+                            Total dos itens reconhecidos
+                        </small>
+
+                        <strong id="text-preview-total">
+                            R$ 0,00
+                        </strong>
+                    </div>
+
+                </div>
+
+                <ul
+                    id="text-warnings"
+                    class="text-import-warnings"
+                    hidden
+                ></ul>
+
+                <div
+                    id="text-issues-box"
+                    class="text-import-issues"
+                    hidden
+                >
+                    <h4>
+                        Preciso que você ajuste estes trechos
+                    </h4>
+
+                    <ul id="text-issues"></ul>
+
+                    <p>
+                        Corrija o texto acima e clique em
+                        Organizar retiradas novamente.
+                        Nenhum item foi salvo.
+                    </p>
+                </div>
+
+                <div
+                    id="text-technician-totals"
+                    class="text-import-technicians"
+                ></div>
+
+                <div class="table-wrap">
+
+                    <table>
+
+                        <thead>
+                            <tr>
+                                <th scope="col">Data</th>
+                                <th scope="col">Técnico</th>
+                                <th scope="col">Item</th>
+                                <th scope="col">Quantidade</th>
+                                <th scope="col">Valor</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="text-preview-rows"></tbody>
+
+                    </table>
+
+                </div>
+
+                <label
+                    id="text-duplicate-label"
+                    class="text-import-check"
+                    for="text-duplicate-ack"
+                    hidden
+                >
+                    <input
+                        id="text-duplicate-ack"
+                        type="checkbox"
+                    >
+
+                    <span>
+                        Conferi o histórico: os itens indicados são
+                        novas retiradas e devem ser lançados.
+                    </span>
+                </label>
+
+                <p class="footnote muted">
+                    Ao confirmar, as retiradas entram no histórico
+                    e na dashboard. O link reúne todas as movimentações
+                    do período escolhido, incluindo as já existentes.
+                    A prévia vale por 30 minutos.
+                </p>
+
+                <button
+                    id="text-confirm"
+                    class="primary text-import-confirm"
+                    type="button"
+                    disabled
+                >
+                    Conferi: salvar retiradas e gerar link →
+                </button>
+
+            </div>
+
+            <!-- RESULTADO DO ASSISTENTE -->
+
+            <div
+                id="text-result"
+                class="share-result"
+                hidden
+            >
+                <label for="text-report-link">
+                    Seu relatório está pronto
+                </label>
+
+                <div class="share-link-row">
+
+                    <input
+                        id="text-report-link"
+                        type="url"
+                        readonly
+                        spellcheck="false"
+                        aria-label="Link do relatório das retiradas"
+                    >
+
+                    <button
+                        id="text-copy"
+                        class="primary"
+                        type="button"
+                    >
+                        Copiar link
+                    </button>
+
+                    <a
+                        id="text-open"
+                        class="button"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Abrir relatório ↗
+                    </a>
+
+                </div>
+
+                <p class="footnote muted">
+                    Você pode copiar o link e enviar ao seu chefe.
+                </p>
+            </div>
+
+        </section>
+
         <!-- GERAR LINKS DE RELATÓRIOS -->
 
         <section
@@ -630,7 +1226,9 @@
             <div class="section-head">
 
                 <div>
-                    <p class="eyebrow">FECHAMENTO E COMPARTILHAMENTO</p>
+                    <p class="eyebrow">
+                        FECHAMENTO E COMPARTILHAMENTO
+                    </p>
 
                     <h3 id="shared-title">
                         Gerar link de relatório
@@ -778,8 +1376,6 @@
                 aria-live="polite"
             ></p>
 
-            <!-- LINK GERADO -->
-
             <div
                 id="share-result"
                 class="share-result"
@@ -820,8 +1416,6 @@
                 </div>
 
             </div>
-
-            <!-- HISTÓRICO DE LINKS -->
 
             <div class="share-history-heading">
 
@@ -1167,14 +1761,14 @@
 
     </dialog>
 
-    <!-- SCRIPT ATUAL DA DASHBOARD -->
+    <!-- DASHBOARD E ASSISTENTE POR TEXTO -->
 
     <script
         src="{{ url_for('static', filename='app.js') }}"
         defer
     ></script>
 
-    <!-- FUNCIONAMENTO DOS RELATÓRIOS COMPARTILHADOS -->
+    <!-- RELATÓRIOS COMPARTILHADOS -->
 
     <script>
         (() => {
