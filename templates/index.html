@@ -35,8 +35,7 @@
             border-color: #57734d;
         }
 
-        #shared-reports [hidden],
-        #text-import [hidden] {
+        [hidden] {
             display: none !important;
         }
 
@@ -224,7 +223,7 @@
             color: var(--coral);
         }
 
-        /* ASSISTENTE DE RETIRADAS POR TEXTO */
+        /* ASSISTENTE DE RETIRADAS */
 
         #text-import {
             margin-bottom: 24px;
@@ -571,7 +570,7 @@
 
         </header>
 
-        <!-- FILTROS DA DASHBOARD -->
+        <!-- FILTROS -->
 
         <section
             class="toolbar panel"
@@ -619,6 +618,8 @@
             >
                 ＋ Nova movimentação
             </button>
+
+            <!-- tela.js acrescenta Limpar tela e Mostrar dados -->
 
         </section>
 
@@ -740,6 +741,7 @@
                 </div>
 
                 <div class="donut" id="donut">
+
                     <div>
                         <small>VALOR LÍQUIDO</small>
 
@@ -747,6 +749,7 @@
                             R$ 0,00
                         </strong>
                     </div>
+
                 </div>
 
                 <div class="legend">
@@ -839,7 +842,7 @@
 
         </section>
 
-        <!-- RETIRADAS POR TEXTO -->
+        <!-- ASSISTENTE DE RETIRADAS -->
 
         <section
             id="text-import"
@@ -855,7 +858,7 @@
                     </p>
 
                     <h3 id="text-import-title">
-                        Escreva as retiradas. Confira. Gere o link.
+                        Cole as retiradas. Confira. Gere o link.
                     </h3>
                 </div>
 
@@ -866,9 +869,10 @@
             </div>
 
             <p class="share-intro">
-                Cole o que cada técnico retirou. O assistente organiza
-                os itens e calcula os custos do catálogo.
-                Nada é lançado até você conferir e confirmar.
+                Cole as movimentações do SGP de um ou vários técnicos.
+                O assistente identifica os itens novos e calcula os
+                custos do catálogo. Nada é lançado até você conferir
+                e confirmar.
             </p>
 
             <form id="text-import-form">
@@ -888,6 +892,7 @@
                             Período
 
                             <select id="text-period">
+
                                 <option value="week">
                                     Segunda a sexta
                                 </option>
@@ -903,6 +908,7 @@
                                 <option value="custom">
                                     Escolher datas
                                 </option>
+
                             </select>
                         </label>
 
@@ -987,35 +993,33 @@
                     </label>
 
                     <p class="footnote muted">
-                        Sem data padrão, informe datas completas no texto.
+                        A tabela do SGP já informa as datas das retiradas.
+                        A data padrão é opcional para textos digitados.
                         Dias como “segunda” são aceitos quando houver apenas
                         uma segunda-feira no período.
-                        Os itens seguintes usam a última data informada.
                     </p>
 
                     <label for="text-source">
-                        O que cada técnico retirou?
+                        Tabela do SGP ou retiradas por escrito
                     </label>
 
                     <textarea
                         id="text-source"
                         rows="8"
-                        maxlength="20000"
+                        maxlength="200000"
                         required
                         aria-describedby="text-help"
-                        placeholder="Rogério pegou 3 APC e 4 cunhas.&#10;Magno retirou 1 XC220.&#10;Wildiney pegou 100 metros de cabo miniflatdrop."
+                        placeholder="Cole aqui a tabela completa do SGP, incluindo o cabeçalho."
                     ></textarea>
 
                     <p
                         id="text-help"
                         class="footnote muted"
                     >
-                        Escreva a quantidade antes do item.
-                        Use nomes específicos: APC, UPC,
-                        Cabo de rede ou Cabo Miniflatdrop.
-                        Para mil metros, escreva 1000.
+                        Cole as colunas ID, Data, Local de Origem,
+                        Local de Destino, Status e Itens.
                         Devoluções continuam no formulário de movimentação,
-                        com a retirada original.
+                        vinculadas à retirada original.
                     </p>
 
                     <div class="actions text-import-actions">
@@ -1032,8 +1036,10 @@
                             id="text-example"
                             type="button"
                         >
-                            Preencher exemplo
+                            Exemplo de texto manual
                         </button>
+
+                        <!-- tela.js acrescenta Limpar / começar outro -->
 
                     </div>
 
@@ -1047,11 +1053,11 @@
                 role="status"
                 aria-live="polite"
             >
-                Olá! Me conte o que cada técnico retirou.
+                Olá! Cole a tabela do SGP de um ou vários técnicos.
                 Vou preparar uma prévia para você conferir.
             </div>
 
-            <!-- PRÉVIA ANTES DA CONFIRMAÇÃO -->
+            <!-- PRÉVIA -->
 
             <div id="text-preview" hidden>
 
@@ -1059,7 +1065,7 @@
 
                     <div>
                         <p class="eyebrow">
-                            PRÉVIA — AINDA NÃO FOI SALVA
+                            PRÉVIA — SOMENTE RETIRADAS NOVAS
                         </p>
 
                         <h4>
@@ -1073,13 +1079,15 @@
                     </div>
 
                     <div class="text-import-total">
+
                         <small>
-                            Total dos itens reconhecidos
+                            Total das novas retiradas reconhecidas
                         </small>
 
                         <strong id="text-preview-total">
                             R$ 0,00
                         </strong>
+
                     </div>
 
                 </div>
@@ -1096,16 +1104,17 @@
                     hidden
                 >
                     <h4>
-                        Preciso que você ajuste estes trechos
+                        Preciso que você confira estes trechos
                     </h4>
 
                     <ul id="text-issues"></ul>
 
                     <p>
-                        Corrija o texto acima e clique em
+                        Corrija as pendências e clique em
                         Organizar retiradas novamente.
                         Nenhum item foi salvo.
                     </p>
+
                 </div>
 
                 <div
@@ -1145,8 +1154,8 @@
                     >
 
                     <span>
-                        Conferi o histórico: os itens indicados são
-                        novas retiradas e devem ser lançados.
+                        Conferi o histórico: os itens indicados
+                        são novas retiradas e devem ser lançados.
                     </span>
                 </label>
 
@@ -1168,13 +1177,14 @@
 
             </div>
 
-            <!-- RESULTADO DO ASSISTENTE -->
+            <!-- RESULTADO -->
 
             <div
                 id="text-result"
                 class="share-result"
                 hidden
             >
+
                 <label for="text-report-link">
                     Seu relatório está pronto
                 </label>
@@ -1211,11 +1221,12 @@
                 <p class="footnote muted">
                     Você pode copiar o link e enviar ao seu chefe.
                 </p>
+
             </div>
 
         </section>
 
-        <!-- GERAR LINKS DE RELATÓRIOS -->
+        <!-- GERAR LINKS -->
 
         <section
             id="shared-reports"
@@ -1417,6 +1428,8 @@
 
             </div>
 
+            <!-- LISTA DE RELATÓRIOS -->
+
             <div class="share-history-heading">
 
                 <h4>Relatórios gerados</h4>
@@ -1428,6 +1441,8 @@
                     ↻ Atualizar lista
                 </button>
 
+                <!-- tela.js acrescenta Restaurar relatórios ocultos -->
+
             </div>
 
             <div id="share-list">
@@ -1437,13 +1452,14 @@
             </div>
 
             <p class="footnote muted">
+                Ocultar da lista muda apenas a visualização neste navegador.
                 Desativar um link bloqueia novas consultas à página e ao PDF.
-                Arquivos que já foram baixados continuam com quem os recebeu.
+                Arquivos já baixados continuam com quem os recebeu.
             </p>
 
         </section>
 
-        <!-- HISTÓRICO E EXPORTAÇÕES -->
+        <!-- HISTÓRICO -->
 
         <section id="history" class="panel">
 
@@ -1606,7 +1622,7 @@
 
     </main>
 
-    <!-- JANELA DE LANÇAMENTO -->
+    <!-- JANELA DE MOVIMENTAÇÃO -->
 
     <dialog
         id="movement-dialog"
@@ -1761,10 +1777,21 @@
 
     </dialog>
 
-    <!-- DASHBOARD E ASSISTENTE POR TEXTO -->
+    <!-- DASHBOARD E IMPORTAÇÃO DO SGP -->
 
     <script
         src="{{ url_for('static', filename='app.js') }}"
+        defer
+    ></script>
+
+    <!-- CONTROLES VISUAIS POR USUÁRIO -->
+
+    <script>
+        window.MATRIZ_SCREEN_USER = {{ session.get('user') | tojson }};
+    </script>
+
+    <script
+        src="{{ url_for('static', filename='tela.js') }}"
         defer
     ></script>
 
@@ -2051,6 +2078,7 @@
                                     `/api/reports/${report.id}/revoke`,
                                     {
                                         method: "POST",
+
                                         headers: {
                                             "X-CSRF-Token": csrf
                                         }
@@ -2239,7 +2267,6 @@
                 }
             };
 
-            // Seleciona o último mês encerrado.
             const current = document.getElementById(
                 "share-week"
             ).value;
